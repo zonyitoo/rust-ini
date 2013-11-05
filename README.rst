@@ -57,4 +57,12 @@ Then you will get ``conf.ini``
         conf.end_section();
 
         println!("{} {}", tommy, green);
+
+        // iterating
+        for (sec, prop) in conf.iter() {
+            println!("Section: {}", sec);
+            for (key, value) in prop.iter() {
+                println!("{}:{}", key, value);
+            }
+        }
     }

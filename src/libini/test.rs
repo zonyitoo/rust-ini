@@ -14,8 +14,8 @@ fn main() {
         .end_section();
     conf.write_file("conf.ini");
 
-    let mut i = Ini::load_from_file("conf.ini");
-    for (sec, prop) in i.sections.iter() {
+    let i = Ini::load_from_file("conf.ini");
+    for (sec, prop) in i.iter() {
         println!("Section: {}", *sec);
         for (k, v) in prop.iter() {
             println!("{}:{}", *k, *v);

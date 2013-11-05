@@ -1,5 +1,6 @@
 extern mod extra;
 use std::hashmap::HashMap;
+use std::hashmap::{HashMapIterator, HashMapMutIterator};
 use std::path::Path;
 use std::rt::io::*;
 use std::cast::transmute;
@@ -35,8 +36,8 @@ fn escape_str(s: &str) -> ~str {
 }
 
 pub struct Ini {
-    sections: HashMap<~str, Properties>,
-    cur_section: ~str,
+    priv sections: HashMap<~str, Properties>,
+    priv cur_section: ~str,
     default_key: ~str,
 }
 
@@ -284,7 +285,7 @@ impl Ini {
         }
     }
 
-    pub fn load_from_filename(filename : &str) -> Ini {
+    pub fn load_from_file(filename : &str) -> Ini {
         let mut reader = match file::open(&Path(filename), Open, Read) {
             None => {
                 fail!("File %s not exists", filename);
@@ -336,5 +337,38 @@ impl Ini {
                 None
             }
         }
+    }
+}
+
+#[deriving(Clone)]
+pub struct SectionIterator<'self> {
+    priv mapiter: HashMapIterator<'self, ~str, Properties>
+}
+
+pub struct SectionMutIterator<'self> {
+    priv mapiter: HashMapMutIterator<'self, ~str, Properties>
+}
+
+impl Ini {
+    pub fn iter<'a>(&'a self) -> SectionIterator<'a> {
+        SectionIterator { mapiter: self.sections.iter() }
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> SectionMutIterator<'a> {
+        SectionMutIterator { mapiter: self.sections.mut_iter() }
+    }
+}
+
+impl<'self> Iterator<(&'self ~str, &'self Properties)> for SectionIterator<'self> {
+    #[inline]
+    fn next(&mut self) -> Option<(&'self ~str, &'self Properties)> {
+        self.mapiter.next()
+    }
+}
+
+impl<'self> Iterator<(&'self ~str, &'self mut Properties)> for SectionMutIterator<'self> {
+    #[inline]
+    fn next(&mut self) -> Option<(&'self ~str, &'self mut Properties)> {
+        self.mapiter.next()
     }
 }
