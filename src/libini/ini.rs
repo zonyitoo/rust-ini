@@ -173,20 +173,25 @@ impl<T: Iterator<char>> Parser<T> {
                 '[' => {
                     match self.parse_section() {
                         Ok(sec) => {
-                            debug!("Got section: %s", sec);
-                            cursec = sec.clone();
-                            result.sections.find_or_insert(sec, HashMap::new());
+                            let msec = sec.trim();
+                            debug!("Got section: %s", msec);
+                            cursec = msec.to_owned();
+                            result.sections.find_or_insert(cursec.clone(), HashMap::new());
                             self.bump();
                         },
                         Err(e) => return Err(e),
                     };
                 }
                 '=' => {
+                    if curkey.char_len() == 0 {
+                        return self.error(~"Missing key");
+                    }
                     match self.parse_val() {
                         Ok(val) => {
-                            debug!("Got value: %s", val);
+                            let mval = val.trim();
+                            debug!("Got value: %s", mval);
                             let sec = result.sections.find_mut(&cursec).unwrap();
-                            sec.insert_or_update_with(curkey, val, |_,_| {});
+                            sec.insert_or_update_with(curkey, mval.to_owned(), |_,_| {});
                             curkey = ~"";
                             self.bump();
                         },
@@ -196,8 +201,9 @@ impl<T: Iterator<char>> Parser<T> {
                 _ => {
                     match self.parse_key() {
                         Ok(key) => {
-                            debug!("Got key: %s", key);
-                            curkey = key.clone();
+                            let mkey = key.trim();
+                            debug!("Got key: %s", mkey);
+                            curkey = mkey.to_owned();
                         }
                         Err(e) => return Err(e),
                     }
@@ -277,13 +283,7 @@ impl<T: Iterator<char>> Parser<T> {
 
     fn parse_val(&mut self) -> Result<~str, Error> {
         self.bump();
-        match self.parse_str_until('\n') {
-            Ok(s) => {
-                s.trim();
-                Ok(s)
-            }
-            Err(e) => Err(e)
-        }
+        self.parse_str_until('\n')
     }
 }
 
