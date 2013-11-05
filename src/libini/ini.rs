@@ -277,7 +277,13 @@ impl<T: Iterator<char>> Parser<T> {
 
     fn parse_val(&mut self) -> Result<~str, Error> {
         self.bump();
-        self.parse_str_until('\n')
+        match self.parse_str_until('\n') {
+            Ok(s) => {
+                s.trim();
+                Ok(s)
+            }
+            Err(e) => Err(e)
+        }
     }
 }
 
