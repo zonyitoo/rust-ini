@@ -243,7 +243,7 @@ impl<T: Iterator<char>> Parser<T> {
                             else if self.ch == '\\' {
                                 self.bump();
                                 if self.ch != '\n' {
-                                    return self.error(format!("Expecting \"\\n\" but found \"{}\".", self.ch));
+                                    return self.error(format!("Expecting \"\\\\n\" but found \"{}\".", self.ch));
                                 }
                             }
                             code.push_char(self.ch);
