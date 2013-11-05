@@ -15,6 +15,7 @@ Usage
 * Create a Ini configuration file.
 
 .. code:: rust
+
     extern mod ini;
     use ini::Ini;
 
@@ -33,6 +34,7 @@ Usage
 Then you will get ``conf.ini`` 
 
 .. code:: ini
+
     [User]
     given_name=Tommy
     family_name=Green
