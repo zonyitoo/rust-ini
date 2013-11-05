@@ -231,6 +231,7 @@ impl<T: Iterator<char>> Parser<T> {
                     't' => result.push_char('\t'),
                     'r' => result.push_char('\r'),
                     'n' => result.push_char('\n'),
+                    '\n' => (),
                     'x' => {
                         // Unicode 4 char
                         let mut code = ~"";
@@ -238,6 +239,12 @@ impl<T: Iterator<char>> Parser<T> {
                             self.bump();
                             if self.eof() {
                                 return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
+                            }
+                            else if self.ch == '\\' {
+                                self.bump();
+                                if self.ch != '\n' {
+                                    return self.error(format!("Expecting \"\\n\" but found \"{}\".", self.ch));
+                                }
                             }
                             code.push_char(self.ch);
                         }

@@ -3,6 +3,7 @@ extern mod ini;
 use ini::Ini;
 
 fn main() {
+    /*
     let mut conf = Ini::new();
     conf.begin_section(~"User")
         .set(~"name", ~"Raspberry树莓")
@@ -13,6 +14,7 @@ fn main() {
         .set(~"location", ~"Guangzhou=world")
         .end_section();
     conf.write_file("conf.ini");
+    */
 
     let i = Ini::load_from_file("conf.ini");
     for (sec, prop) in i.iter() {
