@@ -42,4 +42,19 @@ Then you will get ``conf.ini``
     [Book]
     name=Rust cool
 
+* Read from file ``conf.ini``
 
+.. code:: rust
+
+    extern mod ini;
+    use ini::Ini;
+
+    fn main() {
+        let conf = Ini::load_from_file("conf.ini");
+        conf.begin_section(~"User");
+        let tommy = conf.get(~"given_name");
+        let green = conf.get(~"family_name");
+        conf.end_section();
+
+        println!("{} {}", tommy, green);
+    }
