@@ -6,6 +6,9 @@ use std::char;
 use std::num::from_str_radix;
 use std::str;
 
+#[allow(unsigned_negate)]
+fn eof() -> char { unsafe {transmute(-1u32)} }
+
 fn escape_str(s: &str) -> String {
     let mut escaped: String = "".to_string();
     for c in s.chars() {
@@ -126,9 +129,8 @@ impl<T: Iterator<char>> Parser<T> {
         p
     }
 
-    #[allow(unsigned_negate)]
     fn eof(&self) -> bool {
-        self.ch == unsafe { transmute(-1u32) }
+        self.ch == eof()
     }
 
     #[allow(unsigned_negate)]
@@ -220,9 +222,9 @@ impl<T: Iterator<char>> Parser<T> {
         if !self.eof() { self.bump(); }
     }
 
-    fn parse_str_until(&mut self, endpoint: char) -> Result<String, Error> {
+    fn parse_str_until(&mut self, endpoint: &[char]) -> Result<String, Error> {
         let mut result: String = "".to_string();
-        while self.ch != endpoint {
+        while !endpoint.contains(&self.ch) {
             if self.eof() {
                 return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
             }
@@ -275,16 +277,16 @@ impl<T: Iterator<char>> Parser<T> {
     fn parse_section(&mut self) -> Result<String, Error> {
         // Skip [
         self.bump();
-        self.parse_str_until(']')
+        self.parse_str_until([']'])
     }
 
     fn parse_key(&mut self) -> Result<String, Error> {
-        self.parse_str_until('=')
+        self.parse_str_until(['='])
     }
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_str_until('\n')
+        self.parse_str_until(['\n', eof()])
     }
 }
 
@@ -394,12 +396,27 @@ mod test {
 
     #[test]
     fn load_from_str_opt_with_valid_input() {
-        let input = "[group1]\nkey1=val1\nkye2=377\n[group2]foo=bar\n".to_string();
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar\n".to_string();
         let opt = Ini::load_from_str_opt(input);
         assert!(opt.is_some());
+
         let output = opt.unwrap();
         assert_eq!(output.sections.len(), 2);
-        assert!(output.sections.contains_key(&"group1".to_string()));
-        assert!(output.sections.find(&"group1".to_string()));
+        assert!(output.sections.contains_key(&"sec1".to_string()));
+
+        let sec1 = output.sections.get(&"sec1".to_string());
+        assert_eq!(sec1.len(), 2);
+        assert!(sec1.contains_key(&"key1".to_string()));
+        assert!(sec1.contains_key(&"key2".to_string()));
+        assert_eq!(sec1.get(&"key1".to_string()), &"val1".to_string());
+        assert_eq!(sec1.get(&"key2".to_string()), &"377".to_string());
+
+    }
+
+    #[test]
+    fn load_from_str_opt_without_ending_newline() {
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar".to_string();
+        let opt = Ini::load_from_str_opt(input);
+        assert!(opt.is_some());
     }
 }
