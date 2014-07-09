@@ -53,8 +53,8 @@ impl<'a> Ini {
         }
     }
 
-    pub fn begin_section(&'a mut self, section: String) -> &'a mut Ini {
-        self.cur_section = section.clone();
+    pub fn begin_section(&'a mut self, section: &str) -> &'a mut Ini {
+        self.cur_section = section.to_string();
         self
     }
 
@@ -63,18 +63,18 @@ impl<'a> Ini {
         self
     }
 
-    pub fn set(&'a mut self, key: String, value: String) -> &'a mut Ini {
+    pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
             let dat = self.sections.find_or_insert(self.cur_section.clone(), HashMap::new());
-            dat.insert_or_update_with(key, value, |_,_| {});
+            dat.insert_or_update_with(key.to_string(), value.to_string(), |_,_| {});
         }
         self
     }
 
-    pub fn get(&'a self, key: String) -> &'a String {
+    pub fn get(&'a self, key: &str) -> &'a String {
         let cursec = &self.cur_section;
         let cursec_map: &'a Properties = self.sections.get(cursec);
-        cursec_map.get(&key)
+        cursec_map.get(&key.to_string())
     }
 }
 
