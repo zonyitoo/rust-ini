@@ -21,17 +21,17 @@ Usage
 
     fn main() {
         let mut conf = Ini::new();
-        conf.begin_section(~"User")
-            .set(~"given_name", ~"Tommy")
-            .set(~"family_name", ~"Green")
+        conf.begin_section("User")
+            .set("given_name", "Tommy")
+            .set("family_name", "Green")
             .end_section();
-        conf.begin_section(~"Book")
-            .set(~"name", ~"Rust cool")
+        conf.begin_section("Book")
+            .set("name", "Rust cool")
             .end_section();
         conf.write_file("conf.ini");
     }
 
-Then you will get ``conf.ini`` 
+Then you will get ``conf.ini``
 
 .. code:: ini
 
@@ -51,9 +51,9 @@ Then you will get ``conf.ini``
 
     fn main() {
         let conf = Ini::load_from_file("conf.ini");
-        conf.begin_section(~"User");
-        let tommy = conf.get(~"given_name");
-        let green = conf.get(~"family_name");
+        conf.begin_section("User");
+        let tommy = conf.get("given_name");
+        let green = conf.get("family_name");
         conf.end_section();
 
         println!("{} {}", tommy, green);
