@@ -1,4 +1,4 @@
-extern mod ini;
+extern crate ini;
 
 use ini::Ini;
 
