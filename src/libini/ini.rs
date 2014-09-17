@@ -1,6 +1,6 @@
 use std::collections::hashmap::HashMap;
 use std::collections::hashmap::{Entries, MutEntries};
-use std::io::*;
+use std::io::{File, Read, Open, Write, Truncate};
 use std::mem::transmute;
 use std::char;
 use std::num::from_str_radix;
@@ -15,8 +15,8 @@ fn escape_str(s: &str) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01' .. '\x06' | '\x0E' .. '\x1F' | '\x7F' .. '\xFF'
-                => escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
+            '\x01' .. '\x06' | '\x0E' .. '\x1F' | '\x7F' .. '\xFF' =>
+                escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
             '\x0c' => escaped.push_str("\\f"),
@@ -28,8 +28,8 @@ fn escape_str(s: &str) -> String {
             '#' => escaped.push_str("\\#"),
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
-            '\u0080' .. '\uFFFF'
-                => escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
+            '\u0080' .. '\uFFFF' =>
+                escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
             _ => escaped.push_char(c)
         }
     }
@@ -72,9 +72,7 @@ impl<'a> Ini {
     }
 
     pub fn get(&'a self, key: &str) -> &'a String {
-        let cursec = &self.cur_section;
-        let cursec_map: &'a Properties = self.sections.get(cursec);
-        cursec_map.get(&key.to_string())
+        &self.sections[self.cur_section][key.to_string()]
     }
 }
 
@@ -179,7 +177,8 @@ impl<T: Iterator<char>> Parser<T> {
                             let msec = sec.as_slice().trim();
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
-                            result.sections.find_or_insert(cursec.clone(), HashMap::new());
+                            result.sections.find_or_insert(
+                                cursec.clone(), HashMap::new());
                             self.bump();
                         },
                         Err(e) => return Err(e),
@@ -370,7 +369,7 @@ impl Ini {
     }
 
     pub fn mut_iter<'a>(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.mut_iter() }
+        SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
 }
 
@@ -404,7 +403,7 @@ mod test {
         assert_eq!(output.sections.len(), 2);
         assert!(output.sections.contains_key(&"sec1".to_string()));
 
-        let sec1 = output.sections.get(&"sec1".to_string());
+        let sec1 = &output.sections["sec1".to_string()];
         assert_eq!(sec1.len(), 2);
         assert!(sec1.contains_key(&"key1".to_string()));
         assert!(sec1.contains_key(&"key2".to_string()));

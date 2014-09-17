@@ -1,6 +1,3 @@
-#![crate_id = "ini#0.2"]
-#![crate_type = "lib"]
-
 #![feature(globs)]
 #![feature(phase)]
 
