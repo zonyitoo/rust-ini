@@ -1,5 +1,6 @@
 use std::collections::hashmap::HashMap;
 use std::collections::hashmap::{Entries, MutEntries};
+use std::collections::hashmap::{Occupied, Vacant};
 use std::io::{File, Read, Open, Write, Truncate};
 use std::mem::transmute;
 use std::char;
@@ -15,7 +16,7 @@ fn escape_str(s: &str) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01' .. '\x06' | '\x0E' .. '\x1F' | '\x7F' .. '\xFF' =>
+            '\x01' ... '\x06' | '\x0E' ... '\x1F' | '\x7F' ... '\xFF' =>
                 escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
@@ -28,9 +29,9 @@ fn escape_str(s: &str) -> String {
             '#' => escaped.push_str("\\#"),
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
-            '\u0080' .. '\uFFFF' =>
+            '\u0080' ... '\uFFFF' =>
                 escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
-            _ => escaped.push_char(c)
+            _ => escaped.push(c)
         }
     }
     escaped
@@ -65,8 +66,17 @@ impl<'a> Ini {
 
     pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
-            let dat = self.sections.find_or_insert(self.cur_section.clone(), HashMap::new());
-            dat.insert_or_update_with(key.to_string(), value.to_string(), |_,_| {});
+            let dat = match self.sections.entry(self.cur_section.clone()) {
+                Vacant(entry) => entry.set(HashMap::new()),
+                Occupied(entry) => entry.into_mut(),
+            };
+            match dat.entry(key.to_string()) {
+                Vacant(entry) => entry.set(value.to_string()),
+                Occupied(mut entry) => {
+                    *entry.get_mut() = value.to_string();
+                    entry.into_mut()
+                },
+            };
         }
         self
     }
@@ -177,8 +187,10 @@ impl<T: Iterator<char>> Parser<T> {
                             let msec = sec.as_slice().trim();
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
-                            result.sections.find_or_insert(
-                                cursec.clone(), HashMap::new());
+                            match result.sections.entry(cursec.clone()) {
+                                Vacant(entry) => entry.set(HashMap::new()),
+                                Occupied(entry) => entry.into_mut(),
+                            };
                             self.bump();
                         },
                         Err(e) => return Err(e),
@@ -193,7 +205,13 @@ impl<T: Iterator<char>> Parser<T> {
                             let mval = val.as_slice().trim();
                             debug!("Got value: {}", mval);
                             let sec = result.sections.find_mut(&cursec).unwrap();
-                            sec.insert_or_update_with(curkey, mval.to_string(), |_,_| {});
+                            match sec.entry(curkey) {
+                                Vacant(entry) => entry.set(mval.to_string()),
+                                Occupied(mut entry) => {
+                                    *entry.get_mut() = mval.to_string();
+                                    entry.into_mut()
+                                },
+                            };
                             curkey = "".to_string();
                             self.bump();
                         },
@@ -233,12 +251,12 @@ impl<T: Iterator<char>> Parser<T> {
                     return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
                 }
                 match self.ch {
-                    '0' => result.push_char('\0'),
-                    'a' => result.push_char('\x07'),
-                    'b' => result.push_char('\x08'),
-                    't' => result.push_char('\t'),
-                    'r' => result.push_char('\r'),
-                    'n' => result.push_char('\n'),
+                    '0' => result.push('\0'),
+                    'a' => result.push('\x07'),
+                    'b' => result.push('\x08'),
+                    't' => result.push('\t'),
+                    'r' => result.push('\r'),
+                    'n' => result.push('\n'),
                     '\n' => (),
                     'x' => {
                         // Unicode 4 char
@@ -254,19 +272,19 @@ impl<T: Iterator<char>> Parser<T> {
                                     return self.error(format!("Expecting \"\\\\n\" but found \"{}\".", self.ch));
                                 }
                             }
-                            code.push_char(self.ch);
+                            code.push(self.ch);
                         }
                         let r : Option<u32> = from_str_radix(code.as_slice(), 16);
                         match r {
-                            Some(c) => result.push_char(char::from_u32(c).unwrap()),
+                            Some(c) => result.push(char::from_u32(c).unwrap()),
                             None => return self.error("Unknown character.".to_string())
                         }
                     }
-                    _ => result.push_char(self.ch)
+                    _ => result.push(self.ch)
                 }
             }
             else {
-                result.push_char(self.ch);
+                result.push(self.ch);
             }
             self.bump();
         }
@@ -407,8 +425,8 @@ mod test {
         assert_eq!(sec1.len(), 2);
         assert!(sec1.contains_key(&"key1".to_string()));
         assert!(sec1.contains_key(&"key2".to_string()));
-        assert_eq!(sec1.get(&"key1".to_string()), &"val1".to_string());
-        assert_eq!(sec1.get(&"key2".to_string()), &"377".to_string());
+        assert_eq!(sec1["key1".to_string()], "val1".to_string());
+        assert_eq!(sec1["key2".to_string()], "377".to_string());
 
     }
 
