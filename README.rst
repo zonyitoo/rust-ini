@@ -1,6 +1,9 @@
 INI in RUST
 -----------
 
+.. image:: https://travis-ci.org/zonyitoo/rust-ini.svg?branch=master
+    :target: https://travis-ci.org/zonyitoo/rust-ini
+
 INI_ is an informal standard for configuration files for some platforms or software. INI files are simple text files with a basic structure composed of "sections" and "properties".
 
 .. _INI: http://en.wikipedia.org/wiki/INI_file
@@ -39,7 +42,7 @@ Then you will get ``conf.ini``
     [User]
     given_name=Tommy
     family_name=Green
-    name=Raspberry\x6811\x8393
+    unicode=Raspberry\x6811\x8393
 
     [Book]
     name=Rust cool
