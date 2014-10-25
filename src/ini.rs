@@ -1,3 +1,26 @@
+// The MIT License (MIT)
+
+// Copyright (c) 2014 Y. T. CHUNG
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+/* code */
+
 use std::collections::hashmap::HashMap;
 use std::collections::hashmap::{Entries, MutEntries};
 use std::collections::hashmap::{Occupied, Vacant};
@@ -17,7 +40,7 @@ fn escape_str(s: &str) -> String {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
             '\x01' ... '\x06' | '\x0E' ... '\x1F' | '\x7F' ... '\xFF' =>
-                escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
+                escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
             '\x0c' => escaped.push_str("\\f"),
@@ -30,7 +53,7 @@ fn escape_str(s: &str) -> String {
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
             '\u0080' ... '\uFFFF' =>
-                escaped.push_str(format!("\\\\x{:04x}", c as int).as_slice()),
+                escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
             _ => escaped.push(c)
         }
     }
@@ -45,12 +68,14 @@ pub struct Ini {
 
 pub type Properties = HashMap<String, String>; // Key-value pairs
 
+static GENERAL_SECTION_KEY: &'static str = "@General";
+
 impl<'a> Ini {
     pub fn new() -> Ini {
         Ini {
             sections: HashMap::new(),
-            cur_section: "@General".to_string(),
-            default_key: "@General".to_string(),
+            cur_section: GENERAL_SECTION_KEY.to_string(),
+            default_key: GENERAL_SECTION_KEY.to_string(),
         }
     }
 

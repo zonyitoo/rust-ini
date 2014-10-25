@@ -5,5 +5,4 @@ authors = ["Y. T. Chung <zonyitoo@gmail.com>"]
 
 [lib]
 name = "ini"
-path = "src/libini/lib.rs"
 test = true
