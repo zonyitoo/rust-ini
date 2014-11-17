@@ -21,16 +21,16 @@
 
 /* code */
 
-use std::collections::hashmap::HashMap;
-use std::collections::hashmap::{Entries, MutEntries};
-use std::collections::hashmap::{Occupied, Vacant};
+use std::collections::HashMap;
+use std::collections::hash_map::{Entries, MutEntries};
+use std::collections::hash_map::{Occupied, Vacant};
 use std::io::{File, Read, Open, Write, Truncate};
 use std::mem::transmute;
 use std::char;
 use std::num::from_str_radix;
 use std::str;
 
-#[allow(unsigned_negate)]
+#[allow(unsigned_negation)]
 fn eof() -> char { unsafe {transmute(-1u32)} }
 
 fn escape_str(s: &str) -> String {
@@ -39,7 +39,7 @@ fn escape_str(s: &str) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01' ... '\x06' | '\x0E' ... '\x1F' | '\x7F' ... '\xFF' =>
+            '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u00ff' =>
                 escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
@@ -166,7 +166,7 @@ impl<T: Iterator<char>> Parser<T> {
         self.ch == eof()
     }
 
-    #[allow(unsigned_negate)]
+    #[allow(unsigned_negation)]
     fn bump(&mut self) {
         match self.rdr.next() {
             Some(ch) => self.ch = ch,
@@ -229,7 +229,7 @@ impl<T: Iterator<char>> Parser<T> {
                         Ok(val) => {
                             let mval = val.as_slice().trim();
                             debug!("Got value: {}", mval);
-                            let sec = result.sections.find_mut(&cursec).unwrap();
+                            let sec = result.sections.get_mut(&cursec).unwrap();
                             match sec.entry(curkey) {
                                 Vacant(entry) => entry.set(mval.to_string()),
                                 Occupied(mut entry) => {
@@ -338,7 +338,7 @@ impl Ini {
         match parser.parse() {
             Ok(ini) => ini,
             Err(e) => {
-                fail!("Parse fail. {}:{} {}", e.line, e.col, e.msg);
+                panic!("Parse fail. {}:{} {}", e.line, e.col, e.msg);
             }
         }
     }
@@ -346,7 +346,7 @@ impl Ini {
     pub fn load_from_file(filename : &str) -> Ini {
         let mut reader = match File::open_mode(&Path::new(filename), Open, Read) {
             Err(..) => {
-                fail!("File {} not exists", filename);
+                panic!("File {} not exists", filename);
             }
             Ok(r) => r
         };
