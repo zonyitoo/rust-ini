@@ -319,16 +319,16 @@ impl<T: Iterator<char>> Parser<T> {
     fn parse_section(&mut self) -> Result<String, Error> {
         // Skip [
         self.bump();
-        self.parse_str_until([']'])
+        self.parse_str_until(&[']'])
     }
 
     fn parse_key(&mut self) -> Result<String, Error> {
-        self.parse_str_until(['='])
+        self.parse_str_until(&['='])
     }
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_str_until(['\n', eof()])
+        self.parse_str_until(&['\n', eof()])
     }
 }
 
@@ -354,7 +354,7 @@ impl Ini {
         let mut buf: String = "".to_string();
 
         while !reader.eof() {
-            let len = match reader.read(mem) {
+            let len = match reader.read(&mut mem) {
                 Ok(n) => n,
                 Err(..) => break
             };
@@ -376,7 +376,7 @@ impl Ini {
         let mut buf: String = "".to_string();
 
         while !reader.eof() {
-            let len = match reader.read(mem) {
+            let len = match reader.read(&mut mem) {
                 Ok(n) => n,
                 Err(..) => break
             };
