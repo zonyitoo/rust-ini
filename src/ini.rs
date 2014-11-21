@@ -19,19 +19,15 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-/* code */
-
 use std::collections::HashMap;
 use std::collections::hash_map::{Entries, MutEntries};
 use std::collections::hash_map::{Occupied, Vacant};
 use std::io::{File, Read, Open, Write, Truncate};
-use std::mem::transmute;
+use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
-use std::str;
-
-#[allow(unsigned_negation)]
-fn eof() -> char { unsafe {transmute(-1u32)} }
+use std::io::{BufferedReader, MemReader, IoResult};
+use std::fmt::{mod, Show};
 
 fn escape_str(s: &str) -> String {
     let mut escaped: String = "".to_string();
@@ -106,54 +102,142 @@ impl<'a> Ini {
         self
     }
 
-    pub fn get(&'a self, key: &str) -> &'a String {
-        &self.sections[self.cur_section][key.to_string()]
+    pub fn get(&'a self, key: &str) -> Option<&'a String> {
+        match self.sections.get(&self.cur_section) {
+            None => None,
+            Some(ref prop) => {
+                prop.get(&key.to_string())
+            }
+        }
+    }
+
+    pub fn get_mut(&'a mut self, key: &str) -> Option<&'a mut String> {
+        match self.sections.get_mut(&self.cur_section) {
+            None => None,
+            Some(mut prop) => {
+                prop.get_mut(&key.to_string())
+            }
+        }
     }
 }
 
-impl<'a> Ini {
-    #[allow(unused_must_use)]
-    pub fn write_file(&'a self, filename: &str) -> &'a Ini {
+impl Index<String, Properties> for Ini {
+    fn index<'a>(&'a self, index: &String) -> &'a Properties {
+        &self.sections[*index]
+    }
+}
+
+impl IndexMut<String, Properties> for Ini {
+    fn index_mut<'a>(&'a mut self, index: &String) -> &'a mut Properties {
+        &mut self.sections[*index]
+    }
+}
+
+impl Ini {
+    pub fn write_to_file(&self, filename: &str) -> IoResult<()> {
+        let mut file = try!(File::open_mode(&Path::new(filename), Truncate, Write));
+        self.write_to(&mut file)
+    }
+
+    pub fn write_to(&self, writer: &mut Writer) -> IoResult<()> {
         let mut firstline = true;
-        let mut file = File::open_mode(&Path::new(filename), Truncate, Write).unwrap();
         for (section, props) in self.sections.iter() {
             if firstline {
                 firstline = false;
             }
             else {
-                file.write("\n".as_bytes());
+                try!(writer.write("\n".as_bytes()));
             }
-            let section_str = format!("[{:s}]\n", escape_str(section.as_slice()));
-            file.write(section_str.as_slice().as_bytes());
+            try!(write!(writer, "[{}]\n", escape_str(section.as_slice())));
             for (k, v) in props.iter() {
                 let k_str = escape_str(k.as_slice());
                 let v_str = escape_str(v.as_slice());
-                let prop_str = format!("{:s}={:s}\n", k_str, v_str);
-                file.write(prop_str.as_bytes());
+                try!(write!(writer, "{}={}\n", k_str, v_str));
             }
         }
-
-        self
+        Ok(())
     }
 }
 
-struct Parser<T> {
-    ch: char,
-    rdr: Box<T>,
+impl Ini {
+    pub fn load_from_str(buf: &str) -> Result<Ini, Error> {
+        let bufreader = BufferedReader::new(MemReader::new(buf.as_bytes().to_vec()));
+        let mut parser = Parser::new(bufreader);
+        parser.parse()
+    }
+
+    pub fn read_from(reader: &mut Reader) -> Result<Ini, Error> {
+        let bufr = BufferedReader::new(reader);
+        let mut parser = Parser::new(bufr);
+        parser.parse()
+    }
+
+    pub fn load_from_file(filename : &str) -> Result<Ini, Error> {
+        let mut reader = match File::open_mode(&Path::new(filename), Open, Read) {
+            Err(e) => {
+                return Err(Error {line: 0, col: 0, msg: format!("Unable to open `{}`: {}", filename, e)})
+            }
+            Ok(r) => r
+        };
+        Ini::read_from(&mut reader)
+    }
+}
+
+pub struct SectionIterator<'a> {
+    mapiter: Entries<'a, String, Properties>
+}
+
+pub struct SectionMutIterator<'a> {
+    mapiter: MutEntries<'a, String, Properties>
+}
+
+impl Ini {
+    pub fn iter<'a>(&'a self) -> SectionIterator<'a> {
+        SectionIterator { mapiter: self.sections.iter() }
+    }
+
+    pub fn mut_iter<'a>(&'a mut self) -> SectionMutIterator<'a> {
+        SectionMutIterator { mapiter: self.sections.iter_mut() }
+    }
+}
+
+impl<'a> Iterator<(&'a String, &'a Properties)> for SectionIterator<'a> {
+    #[inline]
+    fn next(&mut self) -> Option<(&'a String, &'a Properties)> {
+        self.mapiter.next()
+    }
+}
+
+impl<'a> Iterator<(&'a String, &'a mut Properties)> for SectionMutIterator<'a> {
+    #[inline]
+    fn next(&mut self) -> Option<(&'a String, &'a mut Properties)> {
+        self.mapiter.next()
+    }
+}
+
+struct Parser<T: Buffer> {
+    ch: Option<char>,
+    rdr: T,
     line: uint,
     col: uint,
 }
 
-struct Error {
-    line: uint,
-    col: uint,
-    msg: String,
+pub struct Error {
+    pub line: uint,
+    pub col: uint,
+    pub msg: String,
 }
 
-impl<T: Iterator<char>> Parser<T> {
-    fn new(rdr: Box<T>) -> Parser<T> {
+impl Show for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{} {}", self.line, self.col, self.msg)
+    }
+}
+
+impl<T: Buffer> Parser<T> {
+    pub fn new(rdr: T) -> Parser<T> {
         let mut p = Parser {
-            ch: '\x00',
+            ch: None,
             line: 0,
             col: 0,
             rdr: rdr
@@ -163,22 +247,26 @@ impl<T: Iterator<char>> Parser<T> {
     }
 
     fn eof(&self) -> bool {
-        self.ch == eof()
+        self.ch.is_none()
     }
 
     #[allow(unsigned_negation)]
     fn bump(&mut self) {
-        match self.rdr.next() {
-            Some(ch) => self.ch = ch,
-            None => self.ch = unsafe { transmute(-1u32) }
+        match self.rdr.read_char() {
+            Ok(ch) => self.ch = Some(ch),
+            Err(..) => self.ch = None,
         }
-
-        if self.ch == '\n' {
-            self.line += 1u;
-            self.col = 0u;
-        }
-        else {
-            self.col += 1u;
+        match self.ch {
+            Some(ch) => {
+                if ch == '\n' {
+                    self.line += 1u;
+                    self.col = 0u;
+                }
+                else {
+                    self.col += 1u;
+                }
+            },
+            None => {},
         }
     }
 
@@ -187,10 +275,10 @@ impl<T: Iterator<char>> Parser<T> {
     }
 
     fn parse_whitespace(&mut self) {
-        while self.ch == ' ' ||
-            self.ch == '\n' ||
-            self.ch == '\t' ||
-            self.ch == '\r' { self.bump(); }
+        while self.ch.unwrap() == ' ' ||
+            self.ch.unwrap() == '\n' ||
+            self.ch.unwrap() == '\t' ||
+            self.ch.unwrap() == '\r' { self.bump(); }
     }
 
     pub fn parse(&mut self) -> Result<Ini, Error> {
@@ -201,7 +289,7 @@ impl<T: Iterator<char>> Parser<T> {
         while !self.eof() {
             self.parse_whitespace();
             debug!("line:{}, col:{}", self.line, self.col);
-            match self.ch {
+            match self.ch.unwrap() {
                 ';' => {
                     self.parse_comment();
                     debug!("parse comment");
@@ -260,22 +348,22 @@ impl<T: Iterator<char>> Parser<T> {
     }
 
     fn parse_comment(&mut self)  {
-        while self.ch != '\n' && !self.eof() { self.bump(); }
+        while self.ch.unwrap() != '\n' && !self.eof() { self.bump(); }
         if !self.eof() { self.bump(); }
     }
 
-    fn parse_str_until(&mut self, endpoint: &[char]) -> Result<String, Error> {
+    fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
         let mut result: String = "".to_string();
         while !endpoint.contains(&self.ch) {
             if self.eof() {
                 return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
             }
-            if self.ch == '\\' {
+            if self.ch.unwrap() == '\\' {
                 self.bump();
                 if self.eof() {
                     return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
                 }
-                match self.ch {
+                match self.ch.unwrap() {
                     '0' => result.push('\0'),
                     'a' => result.push('\x07'),
                     'b' => result.push('\x08'),
@@ -284,20 +372,20 @@ impl<T: Iterator<char>> Parser<T> {
                     'n' => result.push('\n'),
                     '\n' => (),
                     'x' => {
-                        // Unicode 4 char
+                        // Unicode 4 character
                         let mut code: String = "".to_string();
                         for _ in range(0u, 4u) {
                             self.bump();
                             if self.eof() {
                                 return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
                             }
-                            else if self.ch == '\\' {
+                            else if self.ch.unwrap() == '\\' {
                                 self.bump();
-                                if self.ch != '\n' {
+                                if self.ch.unwrap() != '\n' {
                                     return self.error(format!("Expecting \"\\\\n\" but found \"{}\".", self.ch));
                                 }
                             }
-                            code.push(self.ch);
+                            code.push(self.ch.unwrap());
                         }
                         let r : Option<u32> = from_str_radix(code.as_slice(), 16);
                         match r {
@@ -305,11 +393,11 @@ impl<T: Iterator<char>> Parser<T> {
                             None => return self.error("Unknown character.".to_string())
                         }
                     }
-                    _ => result.push(self.ch)
+                    _ => result.push(self.ch.unwrap())
                 }
             }
             else {
-                result.push(self.ch);
+                result.push(self.ch.unwrap());
             }
             self.bump();
         }
@@ -319,114 +407,16 @@ impl<T: Iterator<char>> Parser<T> {
     fn parse_section(&mut self) -> Result<String, Error> {
         // Skip [
         self.bump();
-        self.parse_str_until(&[']'])
+        self.parse_str_until(&[Some(']')])
     }
 
     fn parse_key(&mut self) -> Result<String, Error> {
-        self.parse_str_until(&['='])
+        self.parse_str_until(&[Some('=')])
     }
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_str_until(&['\n', eof()])
-    }
-}
-
-impl Ini {
-    pub fn load_from_str(buf: String) -> Ini {
-        let mut parser = Parser::new(box buf.as_slice().chars());
-        match parser.parse() {
-            Ok(ini) => ini,
-            Err(e) => {
-                panic!("Parse fail. {}:{} {}", e.line, e.col, e.msg);
-            }
-        }
-    }
-
-    pub fn load_from_file(filename : &str) -> Ini {
-        let mut reader = match File::open_mode(&Path::new(filename), Open, Read) {
-            Err(..) => {
-                panic!("File {} not exists", filename);
-            }
-            Ok(r) => r
-        };
-        let mut mem = [0u8, ..10240];
-        let mut buf: String = "".to_string();
-
-        while !reader.eof() {
-            let len = match reader.read(&mut mem) {
-                Ok(n) => n,
-                Err(..) => break
-            };
-
-            buf.push_str(str::from_utf8(mem.slice_to(len)).unwrap());
-        }
-        Ini::load_from_str(buf)
-    }
-
-    pub fn load_from_file_opt(filename : &str) -> Option<Ini> {
-        let mut reader = match File::open_mode(&Path::new(filename), Open, Read) {
-            Err(..) => {
-                error!("File {} not exists", filename);
-                return None;
-            }
-            Ok(r) => r
-        };
-        let mut mem = [0u8, ..10240];
-        let mut buf: String = "".to_string();
-
-        while !reader.eof() {
-            let len = match reader.read(&mut mem) {
-                Ok(n) => n,
-                Err(..) => break
-            };
-
-            buf.push_str(str::from_utf8(mem.slice_to(len)).unwrap());
-        }
-        Ini::load_from_str_opt(buf)
-    }
-
-    pub fn load_from_str_opt(buf : String) -> Option<Ini> {
-        let mut parser = Parser::new(box buf.as_slice().chars());
-        match parser.parse() {
-            Ok(ini) => Some(ini),
-            Err(e) => {
-                error!("Parse fail. {}:{} {}", e.line, e.col, e.msg);
-                None
-            }
-        }
-    }
-}
-
-pub struct SectionIterator<'a> {
-    mapiter: Entries<'a, String, Properties>
-}
-
-pub struct SectionMutIterator<'a> {
-    mapiter: MutEntries<'a, String, Properties>
-}
-
-impl Ini {
-    pub fn iter<'a>(&'a self) -> SectionIterator<'a> {
-        SectionIterator { mapiter: self.sections.iter() }
-    }
-
-    pub fn mut_iter<'a>(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.iter_mut() }
-    }
-}
-
-impl<'a> Iterator<(&'a String, &'a Properties)> for SectionIterator<'a> {
-    #[inline]
-    fn next(&mut self) -> Option<(&'a String, &'a Properties)> {
-        self.mapiter.next()
-    }
-}
-
-impl<'a> Iterator<(&'a String, &'a mut Properties)> for SectionMutIterator<'a> {
-    #[inline]
-    fn next(&mut self) -> Option<(&'a String, &'a mut Properties)> {
-        self.mapiter.next()
+        self.parse_str_until(&[Some('\n'), None])
     }
 }
 
@@ -437,10 +427,10 @@ mod test {
     use ini::*;
 
     #[test]
-    fn load_from_str_opt_with_valid_input() {
-        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar\n".to_string();
-        let opt = Ini::load_from_str_opt(input);
-        assert!(opt.is_some());
+    fn load_from_str_with_valid_input() {
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
 
         let output = opt.unwrap();
         assert_eq!(output.sections.len(), 2);
@@ -456,9 +446,9 @@ mod test {
     }
 
     #[test]
-    fn load_from_str_opt_without_ending_newline() {
-        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar".to_string();
-        let opt = Ini::load_from_str_opt(input);
-        assert!(opt.is_some());
+    fn load_from_str_without_ending_newline() {
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
     }
 }

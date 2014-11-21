@@ -19,8 +19,6 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-/* code */
-
 //! Ini parser for Rust
 //!
 //! ```no_run
@@ -35,10 +33,10 @@
 //!     .set("name", "Sun Yat-sen U")
 //!    .set("location", "Guangzhou=world")
 //!    .end_section();
-//! conf.write_file("conf.ini");
+//! conf.write_to_file("conf.ini").unwrap();
 //!
 //!
-//! let i = Ini::load_from_file("conf.ini");
+//! let i = Ini::load_from_file("conf.ini").unwrap();
 //! for (sec, prop) in i.iter() {
 //!    println!("Section: {}", *sec);
 //!    for (k, v) in prop.iter() {
@@ -54,4 +52,3 @@
 
 pub use ini::Ini;
 pub mod ini;
-

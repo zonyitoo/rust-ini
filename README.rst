@@ -32,7 +32,7 @@ Usage
         conf.begin_section("Book")
             .set("name", "Rust cool")
             .end_section();
-        conf.write_file("conf.ini");
+        conf.write_to_file("conf.ini").unwrap();
     }
 
 Then you will get ``conf.ini``
@@ -55,10 +55,10 @@ Then you will get ``conf.ini``
     use ini::Ini;
 
     fn main() {
-        let conf = Ini::load_from_file("conf.ini");
+        let conf = Ini::load_from_file("conf.ini").unwrap();
         conf.begin_section("User");
-        let tommy = conf.get("given_name");
-        let green = conf.get("family_name");
+        let tommy = conf.get("given_name").unwrap();
+        let green = conf.get("family_name").unwrap();
         conf.end_section();
 
         println!("{} {}", tommy, green);
@@ -71,6 +71,8 @@ Then you will get ``conf.ini``
             }
         }
     }
+
+* More details could be found in `example/`.
 
 License
 =======
