@@ -19,7 +19,7 @@ Usage
 
 .. code:: rust
 
-    extern mod ini;
+    extern crate ini;
     use ini::Ini;
 
     fn main() {
@@ -51,7 +51,7 @@ Then you will get ``conf.ini``
 
 .. code:: rust
 
-    extern mod ini;
+    extern crate ini;
     use ini::Ini;
 
     fn main() {
