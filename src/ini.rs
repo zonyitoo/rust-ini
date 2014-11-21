@@ -127,43 +127,49 @@ impl<'a> Ini {
         self
     }
 
-    pub fn get(&'a self, key: &str) -> Option<&'a String> {
+    pub fn get(&'a self, key: &str) -> Option<&'a str> {
         match self.sections.get(&self.cur_section) {
             None => None,
-            Some(ref prop) => {
-                prop.get(&key.to_string())
-            }
-        }
-    }
-
-    pub fn get_from(&'a self, section: &str, key: &str) -> Option<&'a String> {
-        match self.sections.get(&section.to_string()) {
-            None => None,
-            Some(ref prop) => {
-                prop.get(&key.to_string())
-            }
-        }
-    }
-
-    pub fn get_or(&'a self, key: &str, default: &'a String) -> &'a String {
-        match self.sections.get(&self.cur_section) {
-            None => default,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => p,
-                    None => default,
+                    Some(p) => Some(p.as_slice()),
+                    None => None
                 }
             }
         }
     }
 
-    pub fn get_from_or(&'a self, section: &str, key: &str, default: &'a String) -> &'a String {
+    pub fn get_from(&'a self, section: &str, key: &str) -> Option<&'a str> {
+        match self.sections.get(&section.to_string()) {
+            None => None,
+            Some(ref prop) => {
+                match prop.get(&key.to_string()) {
+                    Some(p) => Some(p.as_slice()),
+                    None => None
+                }
+            }
+        }
+    }
+
+    pub fn get_or(&'a self, key: &str, default: &'a str) -> &'a str {
+        match self.sections.get(&self.cur_section) {
+            None => default,
+            Some(ref prop) => {
+                match prop.get(&key.to_string()) {
+                    Some(p) => p.as_slice(),
+                    None => default
+                }
+            }
+        }
+    }
+
+    pub fn get_from_or(&'a self, section: &str, key: &str, default: &'a str) -> &'a str {
          match self.sections.get(&section.to_string()) {
             None => default,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => p,
-                    None => default,
+                    Some(p) => p.as_slice(),
+                    None => default
                 }
             }
         }
