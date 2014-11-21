@@ -20,7 +20,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
-use std::collections::hash_map::{Entries, MutEntries};
+use std::collections::hash_map::{Entries, MutEntries, Keys};
 use std::collections::hash_map::{Occupied, Vacant};
 use std::io::{File, Read, Open, Write, Truncate};
 use std::ops::{Index, IndexMut};
@@ -85,9 +85,34 @@ impl<'a> Ini {
         self
     }
 
+    pub fn clear(&'a mut self) {
+        self.sections.clear()
+    }
+
+    pub fn sections(&'a mut self) -> Keys<'a, String, Properties> {
+        self.sections.keys()
+    }
+
     pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
             let dat = match self.sections.entry(self.cur_section.clone()) {
+                Vacant(entry) => entry.set(HashMap::new()),
+                Occupied(entry) => entry.into_mut(),
+            };
+            match dat.entry(key.to_string()) {
+                Vacant(entry) => entry.set(value.to_string()),
+                Occupied(mut entry) => {
+                    *entry.get_mut() = value.to_string();
+                    entry.into_mut()
+                },
+            };
+        }
+        self
+    }
+
+    pub fn set_to(&'a mut self, section: &str, key: &str, value: &str) -> &'a mut Ini {
+        {
+            let dat = match self.sections.entry(section.to_string()) {
                 Vacant(entry) => entry.set(HashMap::new()),
                 Occupied(entry) => entry.into_mut(),
             };
@@ -111,8 +136,50 @@ impl<'a> Ini {
         }
     }
 
+    pub fn get_from(&'a self, section: &str, key: &str) -> Option<&'a String> {
+        match self.sections.get(&section.to_string()) {
+            None => None,
+            Some(ref prop) => {
+                prop.get(&key.to_string())
+            }
+        }
+    }
+
+    pub fn get_or(&'a self, key: &str, default: &'a String) -> &'a String {
+        match self.sections.get(&self.cur_section) {
+            None => default,
+            Some(ref prop) => {
+                match prop.get(&key.to_string()) {
+                    Some(p) => p,
+                    None => default,
+                }
+            }
+        }
+    }
+
+    pub fn get_from_or(&'a self, section: &str, key: &str, default: &'a String) -> &'a String {
+         match self.sections.get(&section.to_string()) {
+            None => default,
+            Some(ref prop) => {
+                match prop.get(&key.to_string()) {
+                    Some(p) => p,
+                    None => default,
+                }
+            }
+        }
+    }
+
     pub fn get_mut(&'a mut self, key: &str) -> Option<&'a mut String> {
         match self.sections.get_mut(&self.cur_section) {
+            None => None,
+            Some(mut prop) => {
+                prop.get_mut(&key.to_string())
+            }
+        }
+    }
+
+    pub fn get_from_mut(&'a mut self, section: &str, key: &str) -> Option<&'a mut String> {
+        match self.sections.get_mut(&section.to_string()) {
             None => None,
             Some(mut prop) => {
                 prop.get_mut(&key.to_string())

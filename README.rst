@@ -72,7 +72,7 @@ Then you will get ``conf.ini``
         }
     }
 
-* More details could be found in `example/`.
+* More details could be found in ``example``.
 
 License
 =======
