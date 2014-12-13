@@ -35,7 +35,7 @@ fn escape_str(s: &str) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u00ff' =>
+            '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u{00ff}' =>
                 escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
@@ -48,7 +48,7 @@ fn escape_str(s: &str) -> String {
             '#' => escaped.push_str("\\#"),
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
-            '\u0080' ... '\uFFFF' =>
+            '\u{0080}' ... '\u{FFFF}' =>
                 escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
             _ => escaped.push(c)
         }
