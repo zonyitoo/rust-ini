@@ -20,8 +20,8 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
-use std::collections::hash_map::{Entries, MutEntries, Keys};
-use std::collections::hash_map::{Occupied, Vacant};
+use std::collections::hash_map::{Entries, IterMut, Keys};
+use std::collections::hash_map::Entry;
 use std::io::{File, Read, Open, Write, Truncate};
 use std::ops::{Index, IndexMut};
 use std::char;
@@ -96,12 +96,12 @@ impl<'a> Ini {
     pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
             let dat = match self.sections.entry(self.cur_section.clone()) {
-                Vacant(entry) => entry.set(HashMap::new()),
-                Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => entry.set(HashMap::new()),
+                Entry::Occupied(entry) => entry.into_mut(),
             };
             match dat.entry(key.to_string()) {
-                Vacant(entry) => entry.set(value.to_string()),
-                Occupied(mut entry) => {
+                Entry::Vacant(entry) => entry.set(value.to_string()),
+                Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
                     entry.into_mut()
                 },
@@ -113,12 +113,12 @@ impl<'a> Ini {
     pub fn set_to(&'a mut self, section: &str, key: &str, value: &str) -> &'a mut Ini {
         {
             let dat = match self.sections.entry(section.to_string()) {
-                Vacant(entry) => entry.set(HashMap::new()),
-                Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => entry.set(HashMap::new()),
+                Entry::Occupied(entry) => entry.into_mut(),
             };
             match dat.entry(key.to_string()) {
-                Vacant(entry) => entry.set(value.to_string()),
-                Occupied(mut entry) => {
+                Entry::Vacant(entry) => entry.set(value.to_string()),
+                Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
                     entry.into_mut()
                 },
@@ -261,7 +261,7 @@ pub struct SectionIterator<'a> {
 }
 
 pub struct SectionMutIterator<'a> {
-    mapiter: MutEntries<'a, String, Properties>
+    mapiter: IterMut<'a, String, Properties>
 }
 
 impl Ini {
@@ -374,8 +374,8 @@ impl<T: Buffer> Parser<T> {
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
                             match result.sections.entry(cursec.clone()) {
-                                Vacant(entry) => entry.set(HashMap::new()),
-                                Occupied(entry) => entry.into_mut(),
+                                Entry::Vacant(entry) => entry.set(HashMap::new()),
+                                Entry::Occupied(entry) => entry.into_mut(),
                             };
                             self.bump();
                         },
@@ -383,7 +383,7 @@ impl<T: Buffer> Parser<T> {
                     };
                 }
                 '=' => {
-                    if curkey.as_slice().char_len() == 0 {
+                    if curkey.as_slice().chars().count() == 0 {
                         return self.error("Missing key".to_string());
                     }
                     match self.parse_val() {
@@ -392,8 +392,8 @@ impl<T: Buffer> Parser<T> {
                             debug!("Got value: {}", mval);
                             let sec = result.sections.get_mut(&cursec).unwrap();
                             match sec.entry(curkey) {
-                                Vacant(entry) => entry.set(mval.to_string()),
-                                Occupied(mut entry) => {
+                                Entry::Vacant(entry) => entry.set(mval.to_string()),
+                                Entry::Occupied(mut entry) => {
                                     *entry.get_mut() = mval.to_string();
                                     entry.into_mut()
                                 },
