@@ -20,7 +20,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
-use std::collections::hash_map::{Entries, IterMut, Keys};
+use std::collections::hash_map::{Iter, IterMut, Keys};
 use std::collections::hash_map::Entry;
 use std::io::{File, Read, Open, Write, Truncate};
 use std::ops::{Index, IndexMut};
@@ -257,7 +257,7 @@ impl Ini {
 }
 
 pub struct SectionIterator<'a> {
-    mapiter: Entries<'a, String, Properties>
+    mapiter: Iter<'a, String, Properties>
 }
 
 pub struct SectionMutIterator<'a> {
