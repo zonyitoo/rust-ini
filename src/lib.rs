@@ -47,6 +47,7 @@
 
 #![feature(globs)]
 #![feature(phase)]
+#![feature(associated_types)]
 
 #[phase(plugin, link)] extern crate log;
 

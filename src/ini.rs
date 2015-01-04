@@ -194,13 +194,17 @@ impl<'a> Ini {
     }
 }
 
-impl Index<String, Properties> for Ini {
+impl Index<String> for Ini {
+    type Output = Properties;
+
     fn index<'a>(&'a self, index: &String) -> &'a Properties {
         &self.sections[*index]
     }
 }
 
-impl IndexMut<String, Properties> for Ini {
+impl IndexMut<String> for Ini {
+    type Output = Properties;
+
     fn index_mut<'a>(&'a mut self, index: &String) -> &'a mut Properties {
         &mut self.sections[*index]
     }
@@ -274,14 +278,18 @@ impl Ini {
     }
 }
 
-impl<'a> Iterator<(&'a String, &'a Properties)> for SectionIterator<'a> {
+impl<'a> Iterator for SectionIterator<'a> {
+    type Item = (&'a String, &'a Properties);
+
     #[inline]
     fn next(&mut self) -> Option<(&'a String, &'a Properties)> {
         self.mapiter.next()
     }
 }
 
-impl<'a> Iterator<(&'a String, &'a mut Properties)> for SectionMutIterator<'a> {
+impl<'a> Iterator<> for SectionMutIterator<'a> {
+    type Item = (&'a String, &'a mut Properties);
+
     #[inline]
     fn next(&mut self) -> Option<(&'a String, &'a mut Properties)> {
         self.mapiter.next()
