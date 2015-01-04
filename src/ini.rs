@@ -27,7 +27,7 @@ use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
 use std::io::{BufferedReader, MemReader, IoResult};
-use std::fmt::{mod, Show};
+use std::fmt::{self, Show};
 
 fn escape_str(s: &str) -> String {
     let mut escaped: String = "".to_string();
