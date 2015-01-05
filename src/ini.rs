@@ -95,12 +95,12 @@ impl<'a> Ini {
 
     pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
-            let dat = match self.sections.entry(self.cur_section.clone()) {
-                Entry::Vacant(entry) => entry.set(HashMap::new()),
+            let dat = match self.sections.entry(self.cur_section.as_slice()) {
+                Entry::Vacant(entry) => entry.insert(HashMap::new()),
                 Entry::Occupied(entry) => entry.into_mut(),
             };
-            match dat.entry(key.to_string()) {
-                Entry::Vacant(entry) => entry.set(value.to_string()),
+            match dat.entry(key) {
+                Entry::Vacant(entry) => entry.insert(value.to_string()),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
                     entry.into_mut()
@@ -112,12 +112,12 @@ impl<'a> Ini {
 
     pub fn set_to(&'a mut self, section: &str, key: &str, value: &str) -> &'a mut Ini {
         {
-            let dat = match self.sections.entry(section.to_string()) {
-                Entry::Vacant(entry) => entry.set(HashMap::new()),
+            let dat = match self.sections.entry(section) {
+                Entry::Vacant(entry) => entry.insert(HashMap::new()),
                 Entry::Occupied(entry) => entry.into_mut(),
             };
-            match dat.entry(key.to_string()) {
-                Entry::Vacant(entry) => entry.set(value.to_string()),
+            match dat.entry(key) {
+                Entry::Vacant(entry) => entry.insert(value.to_string()),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
                     entry.into_mut()
@@ -381,8 +381,8 @@ impl<T: Buffer> Parser<T> {
                             let msec = sec.as_slice().trim();
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
-                            match result.sections.entry(cursec.clone()) {
-                                Entry::Vacant(entry) => entry.set(HashMap::new()),
+                            match result.sections.entry(cursec.clone().as_slice()) {
+                                Entry::Vacant(entry) => entry.insert(HashMap::new()),
                                 Entry::Occupied(entry) => entry.into_mut(),
                             };
                             self.bump();
@@ -399,8 +399,8 @@ impl<T: Buffer> Parser<T> {
                             let mval = val.as_slice().trim();
                             debug!("Got value: {}", mval);
                             let sec = result.sections.get_mut(&cursec).unwrap();
-                            match sec.entry(curkey) {
-                                Entry::Vacant(entry) => entry.set(mval.to_string()),
+                            match sec.entry(curkey.as_slice()) {
+                                Entry::Vacant(entry) => entry.insert(mval.to_string()),
                                 Entry::Occupied(mut entry) => {
                                     *entry.get_mut() = mval.to_string();
                                     entry.into_mut()
