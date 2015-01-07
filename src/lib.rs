@@ -45,11 +45,7 @@
 //! }
 //! ```
 
-#![feature(globs)]
-#![feature(phase)]
-#![feature(associated_types)]
-
-#[phase(plugin, link)] extern crate log;
+#[macro_use] extern crate log;
 
 pub use ini::Ini;
 pub mod ini;
