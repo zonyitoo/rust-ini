@@ -36,7 +36,7 @@ fn escape_str(s: &str) -> String {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
             '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u{00ff}' =>
-                escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
+                escaped.push_str(format!("\\x{:04x}", c as isize).as_slice()),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
             '\x0c' => escaped.push_str("\\f"),
@@ -49,7 +49,7 @@ fn escape_str(s: &str) -> String {
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
             '\u{0080}' ... '\u{FFFF}' =>
-                escaped.push_str(format!("\\x{:04x}", c as int).as_slice()),
+                escaped.push_str(format!("\\x{:04x}", c as isize).as_slice()),
             _ => escaped.push(c)
         }
     }
@@ -95,11 +95,11 @@ impl<'a> Ini {
 
     pub fn set(&'a mut self, key: &str, value: &str) -> &'a mut Ini {
         {
-            let dat = match self.sections.entry(self.cur_section.as_slice()) {
+            let dat = match self.sections.entry(self.cur_section.clone()) {
                 Entry::Vacant(entry) => entry.insert(HashMap::new()),
                 Entry::Occupied(entry) => entry.into_mut(),
             };
-            match dat.entry(key) {
+            match dat.entry(key.to_string()) {
                 Entry::Vacant(entry) => entry.insert(value.to_string()),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
@@ -112,11 +112,11 @@ impl<'a> Ini {
 
     pub fn set_to(&'a mut self, section: &str, key: &str, value: &str) -> &'a mut Ini {
         {
-            let dat = match self.sections.entry(section) {
+            let dat = match self.sections.entry(section.to_string()) {
                 Entry::Vacant(entry) => entry.insert(HashMap::new()),
                 Entry::Occupied(entry) => entry.into_mut(),
             };
-            match dat.entry(key) {
+            match dat.entry(key.to_string()) {
                 Entry::Vacant(entry) => entry.insert(value.to_string()),
                 Entry::Occupied(mut entry) => {
                     *entry.get_mut() = value.to_string();
@@ -299,13 +299,13 @@ impl<'a> Iterator<> for SectionMutIterator<'a> {
 struct Parser<T: Buffer> {
     ch: Option<char>,
     rdr: T,
-    line: uint,
-    col: uint,
+    line: usize,
+    col: usize,
 }
 
 pub struct Error {
-    pub line: uint,
-    pub col: uint,
+    pub line: usize,
+    pub col: usize,
     pub msg: String,
 }
 
@@ -340,18 +340,18 @@ impl<T: Buffer> Parser<T> {
         match self.ch {
             Some(ch) => {
                 if ch == '\n' {
-                    self.line += 1u;
-                    self.col = 0u;
+                    self.line += 1;
+                    self.col = 0;
                 }
                 else {
-                    self.col += 1u;
+                    self.col += 1;
                 }
             },
             None => {},
         }
     }
 
-    fn error<T>(&self, msg: String) -> Result<T, Error> {
+    fn error<U>(&self, msg: String) -> Result<U, Error> {
         Err(Error { line: self.line, col: self.col, msg: msg.clone() })
     }
 
@@ -381,7 +381,7 @@ impl<T: Buffer> Parser<T> {
                             let msec = sec.as_slice().trim();
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
-                            match result.sections.entry(cursec.clone().as_slice()) {
+                            match result.sections.entry(cursec.clone()) {
                                 Entry::Vacant(entry) => entry.insert(HashMap::new()),
                                 Entry::Occupied(entry) => entry.into_mut(),
                             };
@@ -399,7 +399,7 @@ impl<T: Buffer> Parser<T> {
                             let mval = val.as_slice().trim();
                             debug!("Got value: {}", mval);
                             let sec = result.sections.get_mut(&cursec).unwrap();
-                            match sec.entry(curkey.as_slice()) {
+                            match sec.entry(curkey) {
                                 Entry::Vacant(entry) => entry.insert(mval.to_string()),
                                 Entry::Occupied(mut entry) => {
                                     *entry.get_mut() = mval.to_string();
@@ -437,12 +437,12 @@ impl<T: Buffer> Parser<T> {
         let mut result: String = "".to_string();
         while !endpoint.contains(&self.ch) {
             if self.eof() {
-                return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
+                return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
             }
             if self.ch.unwrap() == '\\' {
                 self.bump();
                 if self.eof() {
-                    return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
+                    return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
                 }
                 match self.ch.unwrap() {
                     '0' => result.push('\0'),
@@ -455,15 +455,15 @@ impl<T: Buffer> Parser<T> {
                     'x' => {
                         // Unicode 4 character
                         let mut code: String = "".to_string();
-                        for _ in range(0u, 4u) {
+                        for _ in range(0, 4) {
                             self.bump();
                             if self.eof() {
-                                return self.error(format!("Expecting \"{}\" but found EOF.", endpoint));
+                                return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
                             }
                             else if self.ch.unwrap() == '\\' {
                                 self.bump();
                                 if self.ch.unwrap() != '\n' {
-                                    return self.error(format!("Expecting \"\\\\n\" but found \"{}\".", self.ch));
+                                    return self.error(format!("Expecting \"\\\\n\" but found \"{:?}\".", self.ch));
                                 }
                             }
                             code.push(self.ch.unwrap());
