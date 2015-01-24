@@ -27,7 +27,7 @@ use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
 use std::io::{BufferedReader, MemReader, IoResult};
-use std::fmt::{self, Show};
+use std::fmt::{self, Display};
 
 fn escape_str(s: &str) -> String {
     let mut escaped: String = "".to_string();
@@ -303,13 +303,14 @@ struct Parser<T: Buffer> {
     col: usize,
 }
 
+#[derive(Debug)]
 pub struct Error {
     pub line: usize,
     pub col: usize,
     pub msg: String,
 }
 
-impl Show for Error {
+impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{} {}", self.line, self.col, self.msg)
     }
