@@ -36,7 +36,7 @@ fn escape_str(s: &str) -> String {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
             '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u{00ff}' =>
-                escaped.push_str(format!("\\x{:04x}", c as isize).as_slice()),
+                escaped.push_str(&format!("\\x{:04x}", c as isize)[]),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
             '\x0c' => escaped.push_str("\\f"),
@@ -49,7 +49,7 @@ fn escape_str(s: &str) -> String {
             '=' => escaped.push_str("\\="),
             ':' => escaped.push_str("\\:"),
             '\u{0080}' ... '\u{FFFF}' =>
-                escaped.push_str(format!("\\x{:04x}", c as isize).as_slice()),
+                escaped.push_str(&format!("\\x{:04x}", c as isize)[]),
             _ => escaped.push(c)
         }
     }
@@ -132,7 +132,7 @@ impl<'a> Ini {
             None => None,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => Some(p.as_slice()),
+                    Some(p) => Some(&p[]),
                     None => None
                 }
             }
@@ -144,7 +144,7 @@ impl<'a> Ini {
             None => None,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => Some(p.as_slice()),
+                    Some(p) => Some(&p[]),
                     None => None
                 }
             }
@@ -156,7 +156,7 @@ impl<'a> Ini {
             None => default,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => p.as_slice(),
+                    Some(p) => &p[],
                     None => default
                 }
             }
@@ -168,7 +168,7 @@ impl<'a> Ini {
             None => default,
             Some(ref prop) => {
                 match prop.get(&key.to_string()) {
-                    Some(p) => p.as_slice(),
+                    Some(p) => &p[],
                     None => default
                 }
             }
@@ -225,10 +225,10 @@ impl Ini {
             else {
                 try!(writer.write("\n".as_bytes()));
             }
-            try!(write!(writer, "[{}]\n", escape_str(section.as_slice())));
+            try!(write!(writer, "[{}]\n", escape_str(&section[])));
             for (k, v) in props.iter() {
-                let k_str = escape_str(k.as_slice());
-                let v_str = escape_str(v.as_slice());
+                let k_str = escape_str(&k[]);
+                let v_str = escape_str(&v[]);
                 try!(write!(writer, "{}={}\n", k_str, v_str));
             }
         }
@@ -379,7 +379,7 @@ impl<T: Buffer> Parser<T> {
                 '[' => {
                     match self.parse_section() {
                         Ok(sec) => {
-                            let msec = sec.as_slice().trim();
+                            let msec = &sec[].trim();
                             debug!("Got section: {}", msec);
                             cursec = msec.to_string();
                             match result.sections.entry(cursec.clone()) {
@@ -392,12 +392,12 @@ impl<T: Buffer> Parser<T> {
                     };
                 }
                 '=' => {
-                    if curkey.as_slice().chars().count() == 0 {
+                    if (&curkey[]).chars().count() == 0 {
                         return self.error("Missing key".to_string());
                     }
                     match self.parse_val() {
                         Ok(val) => {
-                            let mval = val.as_slice().trim();
+                            let mval = &val[].trim();
                             debug!("Got value: {}", mval);
                             let sec = result.sections.get_mut(&cursec).unwrap();
                             match sec.entry(curkey) {
@@ -416,7 +416,7 @@ impl<T: Buffer> Parser<T> {
                 _ => {
                     match self.parse_key() {
                         Ok(key) => {
-                            let mkey = key.as_slice().trim();
+                            let mkey = &key[].trim();
                             debug!("Got key: {}", mkey);
                             curkey = mkey.to_string();
                         }
@@ -456,7 +456,7 @@ impl<T: Buffer> Parser<T> {
                     'x' => {
                         // Unicode 4 character
                         let mut code: String = "".to_string();
-                        for _ in range(0, 4) {
+                        for _ in 0..4 {
                             self.bump();
                             if self.eof() {
                                 return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
@@ -469,7 +469,7 @@ impl<T: Buffer> Parser<T> {
                             }
                             code.push(self.ch.unwrap());
                         }
-                        let r : Option<u32> = from_str_radix(code.as_slice(), 16);
+                        let r : Option<u32> = from_str_radix(&code[], 16);
                         match r {
                             Some(c) => result.push(char::from_u32(c).unwrap()),
                             None => return self.error("Unknown character.".to_string())

@@ -45,7 +45,6 @@
 //! }
 //! ```
 
-#![allow(unstable)]
 #[macro_use] extern crate log;
 
 pub use ini::Ini;
