@@ -22,11 +22,11 @@
 use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut, Keys};
 use std::collections::hash_map::Entry;
-use std::io::{File, Read, Open, Write, Truncate};
+use std::old_io::{File, Read, Open, Write, Truncate};
 use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
-use std::io::{BufferedReader, MemReader, IoResult};
+use std::old_io::{BufferedReader, MemReader, IoResult};
 use std::fmt::{self, Display};
 
 fn escape_str(s: &str) -> String {
@@ -223,7 +223,7 @@ impl Ini {
                 firstline = false;
             }
             else {
-                try!(writer.write("\n".as_bytes()));
+                try!(writer.write_all("\n".as_bytes()));
             }
             try!(write!(writer, "[{}]\n", escape_str(section.as_slice())));
             for (k, v) in props.iter() {
