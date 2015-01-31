@@ -10,3 +10,6 @@ license = "MIT"
 [lib]
 name = "ini"
 test = true
+
+[dependencies]
+log = "*"
