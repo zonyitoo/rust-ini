@@ -469,10 +469,10 @@ impl<T: Buffer> Parser<T> {
                             }
                             code.push(self.ch.unwrap());
                         }
-                        let r : Option<u32> = from_str_radix(code.as_slice(), 16);
+                        let r = from_str_radix(code.as_slice(), 16);
                         match r {
-                            Some(c) => result.push(char::from_u32(c).unwrap()),
-                            None => return self.error("Unknown character.".to_string())
+                            Ok(c) => result.push(char::from_u32(c).unwrap()),
+                            Err(_) => return self.error("Unknown character.".to_string())
                         }
                     }
                     _ => result.push(self.ch.unwrap())
