@@ -22,11 +22,11 @@
 use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut, Keys};
 use std::collections::hash_map::Entry;
-use std::old_io::{File, Read, Open, Write, Truncate};
+use std::fs::{OpenOptions, File};
 use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
-use std::old_io::{BufferedReader, MemReader, IoResult};
+use std::io::{self, Write, Read, ReadExt, BufReader, Cursor};
 use std::fmt::{self, Display};
 
 fn escape_str(s: &str) -> String {
@@ -209,12 +209,12 @@ impl IndexMut<String> for Ini {
 }
 
 impl Ini {
-    pub fn write_to_file(&self, filename: &str) -> IoResult<()> {
-        let mut file = try!(File::open_mode(&Path::new(filename), Truncate, Write));
+    pub fn write_to_file(&self, filename: &str) -> io::Result<()> {
+        let mut file = try!(OpenOptions::new().write(true).truncate(true).open(&Path::new(filename)));
         self.write_to(&mut file)
     }
 
-    pub fn write_to(&self, writer: &mut Writer) -> IoResult<()> {
+    pub fn write_to(&self, writer: &mut Write) -> io::Result<()> {
         let mut firstline = true;
         for (section, props) in self.sections.iter() {
             if firstline {
@@ -236,19 +236,19 @@ impl Ini {
 
 impl Ini {
     pub fn load_from_str(buf: &str) -> Result<Ini, Error> {
-        let bufreader = BufferedReader::new(MemReader::new(buf.as_bytes().to_vec()));
-        let mut parser = Parser::new(bufreader);
+        let bufreader = BufReader::new(Cursor::new(buf.as_bytes().to_vec()));
+        let mut parser = Parser::new(bufreader.chars());
         parser.parse()
     }
 
-    pub fn read_from(reader: &mut Reader) -> Result<Ini, Error> {
-        let bufr = BufferedReader::new(reader);
-        let mut parser = Parser::new(bufr);
+    pub fn read_from(reader: &mut Read) -> Result<Ini, Error> {
+        let bufr = BufReader::new(reader);
+        let mut parser = Parser::new(bufr.chars());
         parser.parse()
     }
 
     pub fn load_from_file(filename : &str) -> Result<Ini, Error> {
-        let mut reader = match File::open_mode(&Path::new(filename), Open, Read) {
+        let mut reader = match File::open(&Path::new(filename)) {
             Err(e) => {
                 return Err(Error {line: 0, col: 0, msg: format!("Unable to open `{}`: {}", filename, e)})
             }
@@ -294,9 +294,9 @@ impl<'a> Iterator<> for SectionMutIterator<'a> {
     }
 }
 
-struct Parser<T: Buffer> {
+struct Parser<R: ReadExt> {
     ch: Option<char>,
-    rdr: T,
+    rdr: io::Chars<R>,
     line: usize,
     col: usize,
 }
@@ -314,8 +314,8 @@ impl Display for Error {
     }
 }
 
-impl<T: Buffer> Parser<T> {
-    pub fn new(rdr: T) -> Parser<T> {
+impl<R: ReadExt> Parser<R> {
+    pub fn new(rdr: io::Chars<R>) -> Parser<R> {
         let mut p = Parser {
             ch: None,
             line: 0,
@@ -332,9 +332,9 @@ impl<T: Buffer> Parser<T> {
 
     #[allow(unsigned_negation)]
     fn bump(&mut self) {
-        match self.rdr.read_char() {
-            Ok(ch) => self.ch = Some(ch),
-            Err(..) => self.ch = None,
+        match self.rdr.next() {
+            Some(Ok(ch)) => self.ch = Some(ch),
+            _ => self.ch = None,
         }
         match self.ch {
             Some(ch) => {
