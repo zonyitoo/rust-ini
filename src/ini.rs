@@ -203,8 +203,6 @@ impl Index<String> for Ini {
 }
 
 impl IndexMut<String> for Ini {
-    type Output = Properties;
-
     fn index_mut<'a>(&'a mut self, index: &String) -> &'a mut Properties {
         &mut self.sections[*index]
     }
