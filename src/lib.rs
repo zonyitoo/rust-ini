@@ -45,6 +45,7 @@
 //! }
 //! ```
 
+#![feature(std_misc)]
 #![feature(io)]
 #![feature(core)]
 #![feature(path)]
