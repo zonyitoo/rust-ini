@@ -45,7 +45,6 @@
 //! }
 //! ```
 
-#![feature(collections)]
 #![feature(std_misc)]
 #![feature(io)]
 #![feature(core)]
