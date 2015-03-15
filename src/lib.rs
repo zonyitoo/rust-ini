@@ -48,8 +48,6 @@
 #![feature(std_misc)]
 #![feature(io)]
 #![feature(core)]
-#![feature(path)]
-#![feature(fs)]
 #[macro_use] extern crate log;
 
 pub use ini::Ini;

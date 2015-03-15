@@ -26,8 +26,9 @@ use std::fs::{OpenOptions, File};
 use std::ops::{Index, IndexMut};
 use std::char;
 use std::num::from_str_radix;
-use std::io::{self, Write, Read, ReadExt, BufReader, Cursor};
+use std::io::{self, Write, Read, BufReader, Cursor};
 use std::fmt::{self, Display};
+use std::path::Path;
 
 fn escape_str(s: &str) -> String {
     let mut escaped: String = "".to_string();
@@ -294,7 +295,7 @@ impl<'a> Iterator<> for SectionMutIterator<'a> {
     }
 }
 
-struct Parser<R: ReadExt> {
+struct Parser<R: Read> {
     ch: Option<char>,
     rdr: io::Chars<R>,
     line: usize,
@@ -314,7 +315,7 @@ impl Display for Error {
     }
 }
 
-impl<R: ReadExt> Parser<R> {
+impl<R: Read> Parser<R> {
     pub fn new(rdr: io::Chars<R>) -> Parser<R> {
         let mut p = Parser {
             ch: None,
