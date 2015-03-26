@@ -45,7 +45,6 @@
 //! }
 //! ```
 
-#![feature(std_misc)]
 #![feature(io)]
 #![feature(core)]
 #[macro_use] extern crate log;

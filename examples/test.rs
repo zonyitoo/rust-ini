@@ -33,5 +33,5 @@ fn main() {
 
     println!("");
 
-    println!("conf[{}][{}]={}", "User", "name", i["User".to_string()]["name".to_string()]);
+    println!("conf[{}][{}]={}", "User", "name", i["User".to_string()][&"name".to_string()]);
 }

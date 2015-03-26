@@ -198,14 +198,17 @@ impl<'a> Ini {
 impl Index<String> for Ini {
     type Output = Properties;
 
-    fn index<'a>(&'a self, index: &String) -> &'a Properties {
-        &self.sections[*index]
+    fn index<'a>(&'a self, index: String) -> &'a Properties {
+        &self.sections[&index]
     }
 }
 
 impl IndexMut<String> for Ini {
-    fn index_mut<'a>(&'a mut self, index: &String) -> &'a mut Properties {
-        &mut self.sections[*index]
+    fn index_mut<'a>(&'a mut self, index: String) -> &'a mut Properties {
+        match self.sections.get_mut(&index) {
+            Some(p) => p,
+            None => panic!("Key `{}` does not exists", index)
+        }
     }
 }
 
@@ -468,7 +471,7 @@ impl<R: Read> Parser<R> {
                             }
                             code.push(self.ch.unwrap());
                         }
-                        let r = from_str_radix(code.as_slice(), 16);
+                        let r = from_str_radix(&code[..], 16);
                         match r {
                             Ok(c) => result.push(char::from_u32(c).unwrap()),
                             Err(_) => return self.error("Unknown character.".to_string())
@@ -517,12 +520,12 @@ mod test {
         assert_eq!(output.sections.len(), 2);
         assert!(output.sections.contains_key(&"sec1".to_string()));
 
-        let sec1 = &output.sections["sec1".to_string()];
+        let sec1 = &output.sections[&"sec1".to_string()];
         assert_eq!(sec1.len(), 2);
         assert!(sec1.contains_key(&"key1".to_string()));
         assert!(sec1.contains_key(&"key2".to_string()));
-        assert_eq!(sec1["key1".to_string()], "val1".to_string());
-        assert_eq!(sec1["key2".to_string()], "377".to_string());
+        assert_eq!(sec1[&"key1".to_string()], "val1".to_string());
+        assert_eq!(sec1[&"key2".to_string()], "377".to_string());
 
     }
 
