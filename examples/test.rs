@@ -24,14 +24,12 @@ fn main() {
     }
     println!("");
 
-    i.begin_section("User");
     {
-        let name = i.get("name").unwrap();
-        println!("name={}", name);
+        let section = i.section("User");
+        println!("name={}", section.get("name").unwrap());
     }
-    i.end_section();
 
     println!("");
 
-    println!("conf[{}][{}]={}", "User", "name", i["User".to_string()][&"name".to_string()]);
+    println!("conf[{}][{}]={}", "User", "name", i["User"]["name"]);
 }

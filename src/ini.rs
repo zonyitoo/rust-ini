@@ -30,7 +30,7 @@ use std::fmt::{self, Display};
 use std::path::Path;
 
 fn escape_str(s: &str) -> String {
-    let mut escaped: String = "".to_string();
+    let mut escaped: String = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
             '\\' => escaped.push_str("\\\\"),
@@ -50,19 +50,21 @@ fn escape_str(s: &str) -> String {
             ':' => escaped.push_str("\\:"),
             '\u{0080}' ... '\u{FFFF}' =>
                 escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
+
+            // FIXME: Ini files does not support unicode code point in \u{100000} to \u{10FFFF}
             _ => escaped.push(c)
         }
     }
     escaped
 }
 
+pub type Properties = HashMap<String, String>; // Key-value pairs
+
 pub struct Ini {
     sections: HashMap<String, Properties>,
     cur_section: String,
     pub default_key: String,
 }
-
-pub type Properties = HashMap<String, String>; // Key-value pairs
 
 static GENERAL_SECTION_KEY: &'static str = "@General";
 
@@ -83,6 +85,18 @@ impl<'a> Ini {
     pub fn end_section(&'a mut self) -> &'a mut Ini {
         self.cur_section = self.default_key.clone();
         self
+    }
+
+    pub fn general_section(&'a mut self) -> &'a mut Properties {
+        self.index_mut(GENERAL_SECTION_KEY)
+    }
+
+    pub fn section(&'a mut self, name: &str) -> &'a mut Properties {
+        self.index_mut(name)
+    }
+
+    pub fn entry(&mut self, name: String) -> Entry<String, Properties> {
+        self.sections.entry(name)
     }
 
     pub fn clear(&'a mut self) {
@@ -194,19 +208,42 @@ impl<'a> Ini {
     }
 }
 
-impl Index<String> for Ini {
+impl<'q> Index<&'q str> for Ini {
     type Output = Properties;
 
-    fn index<'a>(&'a self, index: String) -> &'a Properties {
-        &self.sections[&index]
+    fn index<'a>(&'a self, index: &str) -> &'a Properties {
+        match self.sections.get(index) {
+            Some(p) => p,
+            None => panic!("Section `{}` does not exists", index),
+        }
     }
 }
 
-impl IndexMut<String> for Ini {
-    fn index_mut<'a>(&'a mut self, index: String) -> &'a mut Properties {
-        match self.sections.get_mut(&index) {
+impl<'q> IndexMut<&'q str> for Ini {
+    fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties {
+        match self.sections.get_mut(index) {
             Some(p) => p,
-            None => panic!("Key `{}` does not exists", index)
+            None => panic!("Section `{}` does not exists", index)
+        }
+    }
+}
+
+impl<'q> Index<&'q String> for Ini {
+    type Output = Properties;
+
+    fn index<'a>(&'a self, index: &String) -> &'a Properties {
+        match self.sections.get(index) {
+            Some(p) => p,
+            None => panic!("Section `{}` does not exists", index),
+        }
+    }
+}
+
+impl<'q> IndexMut<&'q String> for Ini {
+    fn index_mut<'a>(&'a mut self, index: &'q String) -> &'a mut Properties {
+        match self.sections.get_mut(index) {
+            Some(p) => p,
+            None => panic!("Section `{}` does not exists", index)
         }
     }
 }

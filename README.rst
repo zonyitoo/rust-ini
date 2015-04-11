@@ -56,10 +56,10 @@ Then you will get ``conf.ini``
 
     fn main() {
         let conf = Ini::load_from_file("conf.ini").unwrap();
-        conf.begin_section("User");
-        let tommy = conf.get("given_name").unwrap();
-        let green = conf.get("family_name").unwrap();
-        conf.end_section();
+
+        let section = conf.section("User");
+        let tommy = section.get("given_name").unwrap();
+        let green = section.get("family_name").unwrap();
 
         println!("{} {}", tommy, green);
 
@@ -72,7 +72,7 @@ Then you will get ``conf.ini``
         }
     }
 
-* More details could be found in ``example``.
+* More details could be found in ``examples``.
 
 License
 =======
