@@ -25,7 +25,6 @@ use std::collections::hash_map::Entry;
 use std::fs::{OpenOptions, File};
 use std::ops::{Index, IndexMut};
 use std::char;
-use std::num::from_str_radix;
 use std::io::{self, Write, Read, BufReader, Cursor};
 use std::fmt::{self, Display};
 use std::path::Path;
@@ -471,7 +470,7 @@ impl<R: Read> Parser<R> {
                             }
                             code.push(self.ch.unwrap());
                         }
-                        let r = from_str_radix(&code[..], 16);
+                        let r = u32::from_str_radix(&code[..], 16);
                         match r {
                             Ok(c) => result.push(char::from_u32(c).unwrap()),
                             Err(_) => return self.error("Unknown character.".to_string())

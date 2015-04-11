@@ -46,7 +46,6 @@
 //! ```
 
 #![feature(io)]
-#![feature(core)]
 #[macro_use] extern crate log;
 
 pub use ini::Ini;
