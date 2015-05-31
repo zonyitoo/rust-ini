@@ -250,7 +250,7 @@ impl<'q> IndexMut<&'q String> for Ini {
 
 impl Ini {
     pub fn write_to_file(&self, filename: &str) -> io::Result<()> {
-        let mut file = try!(OpenOptions::new().write(true).truncate(true).open(&Path::new(filename)));
+        let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&Path::new(filename)));
         self.write_to(&mut file)
     }
 
