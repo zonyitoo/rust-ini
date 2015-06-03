@@ -15,7 +15,7 @@ fn main() {
         .end_section();
     conf.write_to_file("conf.conf").unwrap();
 
-    let mut i = Ini::load_from_file("conf.conf").unwrap();
+    let i = Ini::load_from_file("conf.conf").unwrap();
     for (sec, prop) in i.iter() {
         println!("Section: {}", *sec);
         for (k, v) in prop.iter() {

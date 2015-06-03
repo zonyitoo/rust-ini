@@ -87,11 +87,19 @@ impl<'a> Ini {
         self
     }
 
-    pub fn general_section(&'a mut self) -> &'a mut Properties {
+    pub fn general_section(&'a self) -> &'a Properties {
+        self.index(GENERAL_SECTION_KEY)
+    }
+
+    pub fn general_section_mut(&'a mut self) -> &'a mut Properties {
         self.index_mut(GENERAL_SECTION_KEY)
     }
 
-    pub fn section(&'a mut self, name: &str) -> &'a mut Properties {
+    pub fn section(&'a self, name: &str) -> &'a Properties {
+        self.index(name)
+    }
+
+    pub fn section_mut(&'a mut self, name: &str) -> &'a mut Properties {
         self.index_mut(name)
     }
 
@@ -103,7 +111,7 @@ impl<'a> Ini {
         self.sections.clear()
     }
 
-    pub fn sections(&'a mut self) -> Keys<'a, String, Properties> {
+    pub fn sections(&'a self) -> Keys<'a, String, Properties> {
         self.sections.keys()
     }
 
