@@ -24,13 +24,13 @@ Usage
 
     fn main() {
         let mut conf = Ini::new();
-        conf.begin_section(None)
+        conf.with_section(None)
             .set("encoding", "utf-8");
-        conf.begin_section(Some("User"))
+        conf.with_section(Some("User"))
             .set("given_name", "Tommy")
             .set("family_name", "Green")
             .set("unicode", "Raspberry树莓");
-        conf.begin_section(Some("Book"))
+        conf.with_section(Some("Book"))
             .set("name", "Rust cool");
         conf.write_to_file("conf.ini").unwrap();
     }
