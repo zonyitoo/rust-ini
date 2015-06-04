@@ -122,13 +122,11 @@ impl<'a> Ini {
     }
 
     pub fn general_section(&'a self) -> &'a Properties {
-        let idx: Option<&str> = None;
-        self.index(&idx)
+        self.section(None).expect("There is no general section in this Ini")
     }
 
     pub fn general_section_mut(&'a mut self) -> &'a mut Properties {
-        let idx: Option<&str> = None;
-        self.index_mut(&idx)
+        self.section_mut(None).expect("There is no general section in this Ini")
     }
 
     pub fn section(&'a self, name: Option<&str>) -> Option<&'a Properties> {
