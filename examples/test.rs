@@ -1,6 +1,10 @@
 extern crate ini;
 
+use std::io::stdout;
+
 use ini::Ini;
+
+const CONF_FILE_NAME: &'static str = "test.ini";
 
 fn main() {
 
@@ -13,23 +17,32 @@ fn main() {
     conf.with_section(Some("Library"))
         .set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
-    conf.write_to_file("conf.conf").unwrap();
 
+    conf.section_mut(Some("Library")).unwrap()
+        .insert("seats".to_owned(), "42".to_owned());
+
+    println!("---------------------------------------");
+    println!("Writing to file {:?}\n", CONF_FILE_NAME);
+    conf.write_to(&mut stdout()).unwrap();
+
+    conf.write_to_file(CONF_FILE_NAME).unwrap();
+
+    println!("----------------------------------------");
+    println!("Reading from file {:?}", CONF_FILE_NAME);
     let i = Ini::load_from_file("conf.conf").unwrap();
+
+    println!("Iterating");
     for (sec, prop) in i.iter() {
-        println!("Section: {:?}", sec);
+        let section_name = sec.clone().unwrap_or("__General__".to_owned());
+        println!("-- Section: {} begins", section_name);
         for (k, v) in prop.iter() {
-            println!("{}:{}", *k, *v);
+            println!("{}: {:?}", *k, *v);
         }
     }
     println!("");
 
-    {
-        let section = i.section(Some("User")).unwrap();
-        println!("name={}", section.get("name").unwrap());
-    }
-
-    println!("");
-
+    let section = i.section(Some("User")).unwrap();
+    println!("name={}", section.get("name").unwrap());
     println!("conf[{}][{}]={}", "User", "name", i["User"]["name"]);
+    println!("General Section: {:?}", i.general_section());
 }
