@@ -24,14 +24,12 @@ Usage
 
     fn main() {
         let mut conf = Ini::new();
-        conf.begin_section("User")
+        conf.begin_section(Some("User"))
             .set("given_name", "Tommy")
             .set("family_name", "Green")
-            .set("unicode", "Raspberry树莓")
-            .end_section();
-        conf.begin_section("Book")
-            .set("name", "Rust cool")
-            .end_section();
+            .set("unicode", "Raspberry树莓");
+        conf.begin_section(Some("Book"))
+            .set("name", "Rust cool");
         conf.write_to_file("conf.ini").unwrap();
     }
 
@@ -57,7 +55,7 @@ Then you will get ``conf.ini``
     fn main() {
         let conf = Ini::load_from_file("conf.ini").unwrap();
 
-        let section = conf.section("User");
+        let section = conf.section(Some("User"));
         let tommy = section.get("given_name").unwrap();
         let green = section.get("family_name").unwrap();
 
@@ -65,7 +63,7 @@ Then you will get ``conf.ini``
 
         // iterating
         for (sec, prop) in conf.iter() {
-            println!("Section: {}", sec);
+            println!("Section: {:?}", sec);
             for (key, value) in prop.iter() {
                 println!("{}:{}", key, value);
             }
