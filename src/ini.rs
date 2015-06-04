@@ -88,6 +88,13 @@ impl<'a> SectionSetter<'a> {
         self
     }
 
+    pub fn delete(&'a mut self, key: &str) -> &'a mut SectionSetter<'a> {
+        if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
+            prop.remove(key);
+        }
+        self
+    }
+
     pub fn get(&'a mut self, key: &str) -> Option<&'a str> {
         let prop = match self.ini.sections.entry(self.section_name.clone()) {
             Entry::Vacant(entry) => entry.insert(HashMap::new()),
@@ -106,15 +113,11 @@ pub struct Ini {
 impl<'a> Ini {
     pub fn new() -> Ini {
         Ini {
-            sections: {
-                let mut props = HashMap::new();
-                props.insert(None, Properties::new());
-                props
-            },
+            sections: HashMap::new(),
         }
     }
 
-    pub fn begin_section(&'a mut self, section: Option<&str>) -> SectionSetter<'a> {
+    pub fn with_section(&'a mut self, section: Option<&str>) -> SectionSetter<'a> {
         SectionSetter::new(self, section.map(|s| s.to_owned()))
     }
 
@@ -179,6 +182,10 @@ impl<'a> Ini {
                 prop.get_mut(&key.to_owned())
             }
         }
+    }
+
+    pub fn delete(&'a mut self, section: Option<&str>) -> Option<Properties> {
+        self.sections.remove(&section.map(|s| s.to_owned()))
     }
 }
 
@@ -468,7 +475,10 @@ impl<R: Read> Parser<R> {
                         Ok(val) => {
                             let mval = &val[..].trim();
                             debug!("Got value: {}", mval);
-                            let sec = result.sections.get_mut(&cursec).unwrap();
+                            let sec = match result.sections.entry(cursec.clone()) {
+                                Entry::Vacant(entry) => entry.insert(HashMap::new()),
+                                Entry::Occupied(entry) => entry.into_mut(),
+                            };
                             match sec.entry(curkey) {
                                 Entry::Vacant(entry) => entry.insert(mval.to_string()),
                                 Entry::Occupied(mut entry) => {
@@ -584,7 +594,7 @@ mod test {
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 3);
+        assert_eq!(output.sections.len(), 2);
         assert!(output.sections.contains_key(&Some("sec1".to_owned())));
 
         let sec1 = &output.sections[&Some("sec1".to_owned())];
