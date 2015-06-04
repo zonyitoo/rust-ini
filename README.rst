@@ -24,6 +24,8 @@ Usage
 
     fn main() {
         let mut conf = Ini::new();
+        conf.begin_section(None)
+            .set("encoding", "utf-8");
         conf.begin_section(Some("User"))
             .set("given_name", "Tommy")
             .set("family_name", "Green")
@@ -36,6 +38,8 @@ Usage
 Then you will get ``conf.ini``
 
 .. code:: ini
+
+    encoding=utf-8
 
     [User]
     given_name=Tommy
@@ -55,7 +59,7 @@ Then you will get ``conf.ini``
     fn main() {
         let conf = Ini::load_from_file("conf.ini").unwrap();
 
-        let section = conf.section(Some("User"));
+        let section = conf.section(Some("User")).unwrap();
         let tommy = section.get("given_name").unwrap();
         let green = section.get("family_name").unwrap();
 

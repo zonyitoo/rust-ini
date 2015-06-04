@@ -6,7 +6,7 @@ fn main() {
 
     let mut conf = Ini::new();
     conf.begin_section(None)
-        .set("general", "value");
+        .set("encoding", "utf-8");
     conf.begin_section(Some("User"))
         .set("name", "Raspberry树莓")
         .set("value", "Pi");
