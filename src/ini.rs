@@ -584,7 +584,7 @@ mod test {
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 2);
+        assert_eq!(output.sections.len(), 3);
         assert!(output.sections.contains_key(&Some("sec1".to_owned())));
 
         let sec1 = &output.sections[&Some("sec1".to_owned())];
