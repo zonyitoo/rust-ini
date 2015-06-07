@@ -63,13 +63,13 @@ Then you will get ``conf.ini``
         let tommy = section.get("given_name").unwrap();
         let green = section.get("family_name").unwrap();
 
-        println!("{} {}", tommy, green);
+        println!("{:?} {:?}", tommy, green);
 
         // iterating
         for (sec, prop) in conf.iter() {
             println!("Section: {:?}", sec);
             for (key, value) in prop.iter() {
-                println!("{}:{}", key, value);
+                println!("{:?}:{:?}", key, value);
             }
         }
     }
