@@ -439,19 +439,13 @@ impl<R: Read> Parser<R> {
                     }
                     match self.parse_val() {
                         Ok(val) => {
-                            let mval = &val[..].trim();
+                            let mval = val[..].trim().to_owned();
                             debug!("Got value: {}", mval);
                             let sec = match result.sections.entry(cursec.clone()) {
                                 Entry::Vacant(entry) => entry.insert(HashMap::new()),
                                 Entry::Occupied(entry) => entry.into_mut(),
                             };
-                            match sec.entry(curkey) {
-                                Entry::Vacant(entry) => entry.insert(Cow::Owned(mval.to_string())),
-                                Entry::Occupied(mut entry) => {
-                                    *entry.get_mut() = Cow::Owned(mval.to_string());
-                                    entry.into_mut()
-                                },
-                            };
+                            sec.insert(curkey, Cow::Owned(mval));
                             curkey = "".into();
                             self.bump();
                         },
@@ -551,6 +545,8 @@ impl<R: Read> Parser<R> {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use ini::*;
 
     #[test]
@@ -565,10 +561,14 @@ mod test {
 
         let sec1 = &output.sections[&Some("sec1".into())];
         assert_eq!(sec1.len(), 2);
-        assert!(sec1.contains_key(&"key1".to_owned()));
-        assert!(sec1.contains_key(&"key2".to_owned()));
-        assert_eq!(sec1[&"key1".to_owned()], "val1".to_owned());
-        assert_eq!(sec1[&"key2".to_owned()], "377".to_owned());
+        let key1: Cow<'static, str> = "key1".into();
+        assert!(sec1.contains_key(&key1));
+        let key2: Cow<'static, str> = "key2".into();
+        assert!(sec1.contains_key(&key2));
+        let val1: Cow<'static, str> = "val1".into();
+        assert_eq!(sec1[&key1], val1);
+        let val2: Cow<'static, str> = "377".into();
+        assert_eq!(sec1[&key2], val2);
 
     }
 
