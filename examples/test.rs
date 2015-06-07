@@ -19,7 +19,7 @@ fn main() {
         .set("location", "Guangzhou=world\x0ahahaha");
 
     conf.section_mut(Some("Library")).unwrap()
-        .insert("seats".to_owned(), "42".to_owned());
+        .insert("seats".into(), "42".to_owned());
 
     println!("---------------------------------------");
     println!("Writing to file {:?}\n", CONF_FILE_NAME);
@@ -32,9 +32,10 @@ fn main() {
     let i = Ini::load_from_file("conf.conf").unwrap();
 
     println!("Iterating");
+    let general_section_name = "__General__".into();
     for (sec, prop) in i.iter() {
-        let section_name = sec.clone().unwrap_or("__General__".to_owned());
-        println!("-- Section: {} begins", section_name);
+        let section_name = sec.as_ref().unwrap_or(&general_section_name);
+        println!("-- Section: {:?} begins", section_name);
         for (k, v) in prop.iter() {
             println!("{}: {:?}", *k, *v);
         }
