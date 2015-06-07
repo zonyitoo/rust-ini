@@ -29,7 +29,7 @@ fn main() {
 
     println!("----------------------------------------");
     println!("Reading from file {:?}", CONF_FILE_NAME);
-    let i = Ini::load_from_file("conf.conf").unwrap();
+    let i = Ini::load_from_file(CONF_FILE_NAME).unwrap();
 
     println!("Iterating");
     let general_section_name = "__General__".into();
