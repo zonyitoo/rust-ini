@@ -19,7 +19,7 @@ fn main() {
         .set("location", "Guangzhou=world\x0ahahaha");
 
     conf.section_mut(Some("Library")).unwrap()
-        .insert("seats".into(), "42".to_owned());
+        .insert("seats".into(), "42".into());
 
     println!("---------------------------------------");
     println!("Writing to file {:?}\n", CONF_FILE_NAME);
