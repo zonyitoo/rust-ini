@@ -12,6 +12,11 @@ This is an INI file parser in Rust_.
 
 .. _Rust: http://www.rust-lang.org/
 
+.. code:: toml
+
+    [dependencies]
+    rust-ini = "*"
+
 Usage
 =====
 

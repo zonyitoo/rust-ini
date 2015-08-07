@@ -374,7 +374,6 @@ impl<R: Read> Parser<R> {
         self.ch.is_none()
     }
 
-    #[allow(unsigned_negation)]
     fn bump(&mut self) {
         match self.rdr.next() {
             Some(Ok(ch)) => self.ch = Some(ch),
