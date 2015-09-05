@@ -17,6 +17,8 @@ This is an INI file parser in Rust_.
     [dependencies]
     rust-ini = "*"
 
+Notice: Currently this crate uses `std::io::Read::chars`, so that it can only be built with nightly until `chars` becomes stable.
+
 Usage
 =====
 
