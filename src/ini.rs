@@ -19,6 +19,8 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+//! Ini
+
 use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut, Keys};
 use std::collections::hash_map::Entry;
@@ -30,6 +32,22 @@ use std::fmt::{self, Display};
 use std::path::Path;
 use std::borrow::Cow;
 
+// Escape non-INI characters
+//
+// Common escape sequences: https://en.wikipedia.org/wiki/INI_file#Escape_characters
+//
+// * `\\` \ (a single backslash, escaping the escape character)
+// * `\0` Null character
+// * `\a` Bell/Alert/Audible
+// * `\b` Backspace, Bell character for some applications
+// * `\t` Tab character
+// * `\r` Carriage return
+// * `\n` Line feed
+// * `\;` Semicolon
+// * `\#` Number sign
+// * `\=` Equals sign
+// * `\:` Colon
+// * `\x????` Unicode character with hexadecimal code point corresponding to ????
 fn escape_str(s: &str) -> String {
     let mut escaped: String = String::with_capacity(s.len());
     for c in s.chars() {
@@ -59,6 +77,7 @@ fn escape_str(s: &str) -> String {
     escaped
 }
 
+/// A setter which could be used to set key-value pair in a specified section
 pub struct SectionSetter<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> {
     ini: &'a mut Ini<'i, 'pk, 'pv>,
     section_name: Option<Cow<'i, str>>,
@@ -72,6 +91,7 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
         }
     }
 
+    /// Set key-value pair in this section
     pub fn set(&'a mut self, key: &'pk str, value: &'pv str) -> &'a mut SectionSetter<'a, 'i, 'pk, 'pv> {
         {
             let prop = match self.ini.sections.entry(self.section_name.clone()) {
@@ -83,6 +103,7 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
         self
     }
 
+    /// Delete the entry in this section with `key`
     pub fn delete(&'a mut self, key: &str) -> &'a mut SectionSetter<'a, 'i, 'pk, 'pv> {
         if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
             prop.remove(key);
@@ -90,6 +111,7 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
         self
     }
 
+    /// Get the entry in this section with `key`
     pub fn get(&'a mut self, key: &str) -> Option<&'a str> {
         let prop = match self.ini.sections.entry(self.section_name.clone()) {
             Entry::Vacant(entry) => entry.insert(HashMap::new()),
@@ -99,55 +121,68 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
     }
 }
 
+/// Properties type (key-value pairs)
 pub type Properties<'k, 'v> = HashMap<Cow<'k, str>, Cow<'v, str>>; // Key-value pairs
 
+/// Ini struct
 pub struct Ini<'a, 'pk: 'a, 'pv: 'a> {
     sections: HashMap<Option<Cow<'a, str>>, Properties<'pk, 'pv>>,
 }
 
 impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+    /// Create an instance
     pub fn new() -> Ini<'i, 'pk, 'pv> {
         Ini {
             sections: HashMap::new(),
         }
     }
 
+    /// Set with a specified section, `None` is for the general section
     pub fn with_section<'b, 's: 'i>(&'b mut self, section: Option<&'s str>) -> SectionSetter<'b, 'i, 'pk, 'pv> {
         SectionSetter::new(self, section.map(|s| s.into()))
     }
 
+    /// Get the immmutable general section
     pub fn general_section<'a: 'i>(&'a self) -> &'i Properties<'pk, 'pv> {
         self.section(None).expect("There is no general section in this Ini")
     }
 
+    /// Get the mutable general section
     pub fn general_section_mut<'a: 'i>(&'a mut self) -> &'i mut Properties<'pk, 'pv> {
         self.section_mut(None).expect("There is no general section in this Ini")
     }
 
+    /// Get a immutable section
     pub fn section<'a: 'i, 'p>(&'a self, name: Option<&'p str>) -> Option<&'i Properties<'pk, 'pv>> {
         self.sections.get(&name.map(|s| s.into()))
     }
 
+    /// Get a mutable section
     pub fn section_mut<'a, 'p: 'i>(&'a mut self, name: Option<&'p str>) -> Option<&'a mut Properties<'pk, 'pv>> {
         self.sections.get_mut(&name.map(|s| s.into()))
     }
 
+    /// Get the entry
     pub fn entry<'a>(&'a mut self, name: Option<String>) -> Entry<Option<Cow<'i, str>>, Properties<'pk, 'pv>> {
         self.sections.entry(name.map(|s| s.into()))
     }
 
+    /// Clear all entries
     pub fn clear<'a>(&mut self) {
         self.sections.clear()
     }
 
+    /// Iterate with sections
     pub fn sections<'a: 'i>(&'a self) -> Keys<'a, Option<Cow<'i, str>>, Properties<'pk, 'pv>> {
         self.sections.keys()
     }
 
+    /// Set key-value to a section
     pub fn set_to(&mut self, section: Option<&'i str>, key: &'pk str, value: &'pv str) {
         self.with_section(section).set(key, value);
     }
 
+    /// Get the value from a section with key
     pub fn get_from<'a>(&'a self, section: Option<&'a str>, key: &str) -> Option<&'a str> {
         match self.sections.get(&section.map(|s| s.into())) {
             None => None,
@@ -160,6 +195,7 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
         }
     }
 
+    /// Get the value from a section with key, return the default value if it does not exists
     pub fn get_from_or<'a>(&'a self, section: Option<&'a str>, key: &str, default: &'a str) -> &'a str {
          match self.sections.get(&section.map(|s| s.into())) {
             None => default,
@@ -172,6 +208,7 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
         }
     }
 
+    /// Get the mutable from a section with key
     pub fn get_from_mut<'a: 'i>(&'a mut self, section: Option<&'a str>, key: &'pk str)
             -> Option<&'i mut Cow<'pv, str>> {
         match self.sections.get_mut(&section.map(|s| s.into())) {
@@ -183,6 +220,7 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
         }
     }
 
+    /// Delete a section, return the properties if it exists
     pub fn delete(&mut self, section: Option<&'i str>) -> Option<Properties<'pk, 'pv>> {
         self.sections.remove(&section.map(|s| s.into()))
     }
@@ -236,12 +274,14 @@ impl<'q, 'pk: 'q, 'pv: 'q> IndexMut<&'q str> for Ini<'q, 'pk, 'pv> {
 }
 
 impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+    /// Write to a file
     pub fn write_to_file(&'i self, filename: &str) -> io::Result<()> {
         let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&Path::new(filename)));
         self.write_to(&mut file)
     }
 
-    pub fn write_to(&'i self, writer: &mut Write) -> io::Result<()> {
+    /// Write to a writer
+    pub fn write_to<W: Write>(&'i self, writer: &mut W) -> io::Result<()> {
         let mut firstline = true;
 
         match self.sections.get(&None) {
@@ -279,18 +319,21 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
 }
 
 impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+    /// Load from a string
     pub fn load_from_str(buf: &str) -> Result<Ini<'i, 'pk, 'pv>, Error> {
         let bufreader = BufReader::new(Cursor::new(buf.as_bytes().to_vec()));
         let mut parser = Parser::new(bufreader.chars());
         parser.parse()
     }
 
-    pub fn read_from(reader: &mut Read) -> Result<Ini<'i, 'pk, 'pv>, Error> {
+    /// Load from a reader
+    pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini<'i, 'pk, 'pv>, Error> {
         let bufr = BufReader::new(reader);
         let mut parser = Parser::new(bufr.chars());
         parser.parse()
     }
 
+    /// Load from a file
     pub fn load_from_file(filename : &str) -> Result<Ini<'i, 'pk, 'pv>, Error> {
         let mut reader = match File::open(&Path::new(filename)) {
             Err(e) => {
@@ -302,19 +345,23 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 }
 
+/// Iterator for sections
 pub struct SectionIterator<'a, 'pk: 'a, 'pv: 'a> {
     mapiter: Iter<'a, Option<Cow<'a, str>>, Properties<'pk, 'pv>>
 }
 
+/// Iterator for mutable sections
 pub struct SectionMutIterator<'a, 'pk: 'a, 'pv: 'a> {
     mapiter: IterMut<'a, Option<Cow<'a, str>>, Properties<'pk, 'pv>>
 }
 
 impl<'a, 'pk: 'a, 'pv: 'a> Ini<'a, 'pk, 'pv> {
+    /// Immutable iterate though sections
     pub fn iter(&'a self) -> SectionIterator<'a, 'pk, 'pv> {
         SectionIterator { mapiter: self.sections.iter() }
     }
 
+    /// Mutable iterate though sections
     pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a, 'pk, 'pv> {
         SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
@@ -338,6 +385,7 @@ impl<'a, 'pk: 'a, 'pv: 'a> Iterator<> for SectionMutIterator<'a, 'pk, 'pv> {
     }
 }
 
+// Ini parser
 struct Parser<R: Read> {
     ch: Option<char>,
     rdr: io::Chars<R>,
@@ -346,6 +394,7 @@ struct Parser<R: Read> {
 }
 
 #[derive(Debug)]
+/// Parse error
 pub struct Error {
     pub line: usize,
     pub col: usize,
@@ -359,6 +408,7 @@ impl Display for Error {
 }
 
 impl<R: Read> Parser<R> {
+    // Create a parser
     pub fn new(rdr: io::Chars<R>) -> Parser<R> {
         let mut p = Parser {
             ch: None,
