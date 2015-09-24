@@ -27,10 +27,11 @@ use std::collections::hash_map::Entry;
 use std::fs::{OpenOptions, File};
 use std::ops::{Index, IndexMut};
 use std::char;
-use std::io::{self, Write, Read, BufReader, Cursor};
+use std::io::{self, Write, Read};
 use std::fmt::{self, Display};
 use std::path::Path;
 use std::borrow::Cow;
+use std::str::Chars;
 
 // Escape non-INI characters
 //
@@ -321,15 +322,19 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
 impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     /// Load from a string
     pub fn load_from_str(buf: &str) -> Result<Ini<'i, 'pk, 'pv>, Error> {
-        let bufreader = BufReader::new(Cursor::new(buf.as_bytes().to_vec()));
-        let mut parser = Parser::new(bufreader.chars());
+        let mut parser = Parser::new(buf.chars());
         parser.parse()
     }
 
     /// Load from a reader
     pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini<'i, 'pk, 'pv>, Error> {
-        let bufr = BufReader::new(reader);
-        let mut parser = Parser::new(bufr.chars());
+        let mut s = String::new();
+        try!(reader.read_to_string(&mut s).map_err(|err| Error {
+            line: 0,
+            col: 0,
+            msg: format!("{}", err),
+        }));
+        let mut parser = Parser::new(s.chars());
         parser.parse()
     }
 
@@ -386,9 +391,9 @@ impl<'a, 'pk: 'a, 'pv: 'a> Iterator<> for SectionMutIterator<'a, 'pk, 'pv> {
 }
 
 // Ini parser
-struct Parser<R: Read> {
+struct Parser<'a> {
     ch: Option<char>,
-    rdr: io::Chars<R>,
+    rdr: Chars<'a>,
     line: usize,
     col: usize,
 }
@@ -407,14 +412,14 @@ impl Display for Error {
     }
 }
 
-impl<R: Read> Parser<R> {
+impl<'a> Parser<'a> {
     // Create a parser
-    pub fn new(rdr: io::Chars<R>) -> Parser<R> {
+    pub fn new(rdr: Chars<'a>) -> Parser<'a> {
         let mut p = Parser {
             ch: None,
             line: 0,
             col: 0,
-            rdr: rdr
+            rdr: rdr,
         };
         p.bump();
         p
@@ -426,7 +431,7 @@ impl<R: Read> Parser<R> {
 
     fn bump(&mut self) {
         match self.rdr.next() {
-            Some(Ok(ch)) => self.ch = Some(ch),
+            Some(ch) => self.ch = Some(ch),
             _ => self.ch = None,
         }
         match self.ch {
