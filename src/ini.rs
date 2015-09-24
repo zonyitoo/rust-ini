@@ -461,10 +461,10 @@ impl<'a> Parser<'a> {
         let mut result = Ini::new();
         let mut curkey: Cow<'pk, str> = "".into();
         let mut cursec: Option<Cow<'i, str>> = None;
-        while let Some(cur_c) = self.ch {
-            self.parse_whitespace();
+        self.parse_whitespace();
+        while let Some(cur_ch) = self.ch {
             debug!("line:{}, col:{}", self.line, self.col);
-            match cur_c {
+            match cur_ch {
                 ';' => {
                     self.parse_comment();
                     debug!("parse comment");
@@ -508,6 +508,8 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
+
+            self.parse_whitespace();
         }
 
         Ok(result)
