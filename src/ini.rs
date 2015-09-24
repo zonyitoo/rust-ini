@@ -430,20 +430,15 @@ impl<'a> Parser<'a> {
     }
 
     fn bump(&mut self) {
-        match self.rdr.next() {
-            Some(ch) => self.ch = Some(ch),
-            _ => self.ch = None,
-        }
+        self.ch = self.rdr.next();
         match self.ch {
-            Some(ch) => {
-                if ch == '\n' {
-                    self.line += 1;
-                    self.col = 0;
-                }
-                else {
-                    self.col += 1;
-                }
+            Some('\n') => {
+                self.line += 1;
+                self.col = 0;
             },
+            Some(..) => {
+                self.col += 1;
+            }
             None => {},
         }
     }
@@ -453,10 +448,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_whitespace(&mut self) {
-        while self.ch.unwrap() == ' ' ||
-            self.ch.unwrap() == '\n' ||
-            self.ch.unwrap() == '\t' ||
-            self.ch.unwrap() == '\r' { self.bump(); }
+        while let Some(c) = self.ch {
+            if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
+                break;
+            }
+            self.bump();
+        }
     }
 
     pub fn parse<'i, 'pk: 'i, 'pv: 'i>(&mut self) -> Result<Ini<'i, 'pk, 'pv>, Error> {
@@ -464,10 +461,10 @@ impl<'a> Parser<'a> {
         let mut result = Ini::new();
         let mut curkey: Cow<'pk, str> = "".into();
         let mut cursec: Option<Cow<'i, str>> = None;
-        while !self.eof() {
+        while let Some(cur_c) = self.ch {
             self.parse_whitespace();
             debug!("line:{}, col:{}", self.line, self.col);
-            match self.ch.unwrap() {
+            match cur_c {
                 ';' => {
                     self.parse_comment();
                     debug!("parse comment");
@@ -478,27 +475,21 @@ impl<'a> Parser<'a> {
                             let msec = &sec[..].trim();
                             debug!("Got section: {}", msec);
                             cursec = Some(Cow::Owned(msec.to_string()));
-                            match result.sections.entry(cursec.clone()) {
-                                Entry::Vacant(entry) => entry.insert(HashMap::new()),
-                                Entry::Occupied(entry) => entry.into_mut(),
-                            };
+                            result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             self.bump();
                         },
                         Err(e) => return Err(e),
                     };
                 }
                 '=' => {
-                    if (&curkey[..]).chars().count() == 0 {
+                    if (&curkey[..]).is_empty() {
                         return self.error("Missing key".to_string());
                     }
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
                             debug!("Got value: {}", mval);
-                            let sec = match result.sections.entry(cursec.clone()) {
-                                Entry::Vacant(entry) => entry.insert(HashMap::new()),
-                                Entry::Occupied(entry) => entry.into_mut(),
-                            };
+                            let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             sec.insert(curkey, Cow::Owned(mval));
                             curkey = "".into();
                             self.bump();
@@ -523,56 +514,57 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_comment(&mut self)  {
-        while self.ch.unwrap() != '\n' && !self.eof() { self.bump(); }
-        if !self.eof() { self.bump(); }
+        while let Some(c) = self.ch { self.bump(); if c == '\n' { break; }  }
     }
 
     fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
-        let mut result: String = "".to_string();
+        let mut result: String = String::new();
         while !endpoint.contains(&self.ch) {
-            if self.eof() {
-                return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
-            }
-            if self.ch.unwrap() == '\\' {
-                self.bump();
-                if self.eof() {
+            match self.ch {
+                None => {
                     return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
-                }
-                match self.ch.unwrap() {
-                    '0' => result.push('\0'),
-                    'a' => result.push('\x07'),
-                    'b' => result.push('\x08'),
-                    't' => result.push('\t'),
-                    'r' => result.push('\r'),
-                    'n' => result.push('\n'),
-                    '\n' => (),
-                    'x' => {
-                        // Unicode 4 character
-                        let mut code: String = "".to_string();
-                        for _ in 0..4 {
-                            self.bump();
-                            if self.eof() {
-                                return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
-                            }
-                            else if self.ch.unwrap() == '\\' {
-                                self.bump();
-                                if self.ch.unwrap() != '\n' {
-                                    return self.error(format!("Expecting \"\\\\n\" but found \"{:?}\".", self.ch));
-                                }
-                            }
-                            code.push(self.ch.unwrap());
-                        }
-                        let r = u32::from_str_radix(&code[..], 16);
-                        match r {
-                            Ok(c) => result.push(char::from_u32(c).unwrap()),
-                            Err(_) => return self.error("Unknown character.".to_string())
-                        }
+                },
+                Some('\\') => {
+                    self.bump();
+                    if self.eof() {
+                        return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
                     }
-                    _ => result.push(self.ch.unwrap())
+                    match self.ch.unwrap() {
+                        '0' => result.push('\0'),
+                        'a' => result.push('\x07'),
+                        'b' => result.push('\x08'),
+                        't' => result.push('\t'),
+                        'r' => result.push('\r'),
+                        'n' => result.push('\n'),
+                        '\n' => (),
+                        'x' => {
+                            // Unicode 4 character
+                            let mut code: String = String::with_capacity(4);
+                            for _ in 0..4 {
+                                self.bump();
+                                if self.eof() {
+                                    return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
+                                }
+                                else if let Some('\\') = self.ch {
+                                    self.bump();
+                                    if self.ch != Some('\n') {
+                                        return self.error(format!("Expecting \"\\\\n\" but found \"{:?}\".", self.ch));
+                                    }
+                                }
+                                code.push(self.ch.unwrap());
+                            }
+                            let r = u32::from_str_radix(&code[..], 16);
+                            match r {
+                                Ok(c) => result.push(char::from_u32(c).unwrap()),
+                                Err(_) => return self.error("Unknown character.".to_string())
+                            }
+                        }
+                        c => result.push(c)
+                    }
+                },
+                Some(c) => {
+                    result.push(c);
                 }
-            }
-            else {
-                result.push(self.ch.unwrap());
             }
             self.bump();
         }
@@ -629,6 +621,13 @@ mod test {
     #[test]
     fn load_from_str_without_ending_newline() {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+    }
+
+    #[test]
+    fn test_parse_comment() {
+        let input = "; abcdefghijklmn\n";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
     }
