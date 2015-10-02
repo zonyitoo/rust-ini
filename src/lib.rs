@@ -25,10 +25,10 @@
 //! use ini::Ini;
 //!
 //! let mut conf = Ini::new();
-//! conf.with_section(Some("User"))
+//! conf.with_section(Some("User".to_owned()))
 //!     .set("name", "Raspberry树莓")
 //!     .set("value", "Pi");
-//! conf.with_section(Some("Library"))
+//! conf.with_section(Some("Library".to_owned()))
 //!     .set("name", "Sun Yat-sen U")
 //!     .set("location", "Guangzhou=world");
 //! conf.write_to_file("conf.ini").unwrap();

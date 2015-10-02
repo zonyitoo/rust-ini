@@ -11,14 +11,14 @@ fn main() {
     let mut conf = Ini::new();
     conf.with_section(None)
         .set("encoding", "utf-8");
-    conf.with_section(Some("User"))
+    conf.with_section(Some("User".to_owned()))
         .set("name", "Raspberry树莓")
         .set("value", "Pi");
-    conf.with_section(Some("Library"))
+    conf.with_section(Some("Library".to_owned()))
         .set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
 
-    conf.section_mut(Some("Library")).unwrap()
+    conf.section_mut(Some("Library".to_owned())).unwrap()
         .insert("seats".into(), "42".into());
 
     println!("---------------------------------------");
@@ -42,7 +42,7 @@ fn main() {
     }
     println!("");
 
-    let section = i.section(Some("User")).unwrap();
+    let section = i.section(Some("User".to_owned())).unwrap();
     println!("name={}", section.get("name").unwrap());
     println!("conf[{}][{}]={}", "User", "name", i["User"]["name"]);
     println!("General Section: {:?}", i.general_section());

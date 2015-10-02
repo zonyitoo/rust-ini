@@ -30,8 +30,10 @@ use std::char;
 use std::io::{self, Write, Read};
 use std::fmt::{self, Display};
 use std::path::Path;
-use std::borrow::Cow;
 use std::str::Chars;
+use std::borrow::Borrow;
+use std::hash::Hash;
+use std::cmp::Eq;
 
 // Escape non-INI characters
 //
@@ -79,13 +81,13 @@ fn escape_str(s: &str) -> String {
 }
 
 /// A setter which could be used to set key-value pair in a specified section
-pub struct SectionSetter<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> {
-    ini: &'a mut Ini<'i, 'pk, 'pv>,
-    section_name: Option<Cow<'i, str>>,
+pub struct SectionSetter<'a> {
+    ini: &'a mut Ini,
+    section_name: Option<String>,
 }
 
-impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
-    fn new(ini: &'a mut Ini<'i, 'pk, 'pv>, section_name: Option<Cow<'i, str>>) -> SectionSetter<'a, 'i, 'pk, 'pv> {
+impl<'a> SectionSetter<'a> {
+    fn new(ini: &'a mut Ini, section_name: Option<String>) -> SectionSetter<'a> {
         SectionSetter {
             ini: ini,
             section_name: section_name,
@@ -93,7 +95,10 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
     }
 
     /// Set key-value pair in this section
-    pub fn set(&'a mut self, key: &'pk str, value: &'pv str) -> &'a mut SectionSetter<'a, 'i, 'pk, 'pv> {
+    pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+        where K: Into<String>,
+              V: Into<String>
+    {
         {
             let prop = match self.ini.sections.entry(self.section_name.clone()) {
                 Entry::Vacant(entry) => entry.insert(HashMap::new()),
@@ -105,7 +110,10 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
     }
 
     /// Delete the entry in this section with `key`
-    pub fn delete(&'a mut self, key: &str) -> &'a mut SectionSetter<'a, 'i, 'pk, 'pv> {
+    pub fn delete<K>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a>
+        where String: Borrow<K>,
+              K: Hash + Eq
+    {
         if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
             prop.remove(key);
         }
@@ -113,7 +121,10 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
     }
 
     /// Get the entry in this section with `key`
-    pub fn get(&'a mut self, key: &str) -> Option<&'a str> {
+    pub fn get<K>(&'a mut self, key: &K) -> Option<&'a str>
+        where String: Borrow<K>,
+              K: Hash + Eq
+    {
         let prop = match self.ini.sections.entry(self.section_name.clone()) {
             Entry::Vacant(entry) => entry.insert(HashMap::new()),
             Entry::Occupied(entry) => entry.into_mut(),
@@ -123,48 +134,48 @@ impl<'a, 'i: 'a, 'pk: 'i, 'pv: 'i> SectionSetter<'a, 'i, 'pk, 'pv> {
 }
 
 /// Properties type (key-value pairs)
-pub type Properties<'k, 'v> = HashMap<Cow<'k, str>, Cow<'v, str>>; // Key-value pairs
+pub type Properties = HashMap<String, String>; // Key-value pairs
 
 /// Ini struct
-pub struct Ini<'a, 'pk: 'a, 'pv: 'a> {
-    sections: HashMap<Option<Cow<'a, str>>, Properties<'pk, 'pv>>,
+pub struct Ini {
+    sections: HashMap<Option<String>, Properties>,
 }
 
-impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+impl Ini {
     /// Create an instance
-    pub fn new() -> Ini<'i, 'pk, 'pv> {
+    pub fn new() -> Ini {
         Ini {
             sections: HashMap::new(),
         }
     }
 
     /// Set with a specified section, `None` is for the general section
-    pub fn with_section<'b, 's: 'i>(&'b mut self, section: Option<&'s str>) -> SectionSetter<'b, 'i, 'pk, 'pv> {
+    pub fn with_section<'b>(&'b mut self, section: Option<String>) -> SectionSetter<'b> {
         SectionSetter::new(self, section.map(|s| s.into()))
     }
 
     /// Get the immmutable general section
-    pub fn general_section<'a: 'i>(&'a self) -> &'i Properties<'pk, 'pv> {
+    pub fn general_section(&self) -> &Properties {
         self.section(None).expect("There is no general section in this Ini")
     }
 
     /// Get the mutable general section
-    pub fn general_section_mut<'a: 'i>(&'a mut self) -> &'i mut Properties<'pk, 'pv> {
+    pub fn general_section_mut(&mut self) -> &mut Properties {
         self.section_mut(None).expect("There is no general section in this Ini")
     }
 
     /// Get a immutable section
-    pub fn section<'a: 'i, 'p>(&'a self, name: Option<&'p str>) -> Option<&'i Properties<'pk, 'pv>> {
+    pub fn section<'a, 'p>(&'a self, name: Option<String>) -> Option<&'a Properties> {
         self.sections.get(&name.map(|s| s.into()))
     }
 
     /// Get a mutable section
-    pub fn section_mut<'a, 'p: 'i>(&'a mut self, name: Option<&'p str>) -> Option<&'a mut Properties<'pk, 'pv>> {
+    pub fn section_mut<'a>(&'a mut self, name: Option<String>) -> Option<&'a mut Properties> {
         self.sections.get_mut(&name.map(|s| s.into()))
     }
 
     /// Get the entry
-    pub fn entry<'a>(&'a mut self, name: Option<String>) -> Entry<Option<Cow<'i, str>>, Properties<'pk, 'pv>> {
+    pub fn entry<'a>(&'a mut self, name: Option<String>) -> Entry<Option<String>, Properties> {
         self.sections.entry(name.map(|s| s.into()))
     }
 
@@ -174,17 +185,17 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 
     /// Iterate with sections
-    pub fn sections<'a: 'i>(&'a self) -> Keys<'a, Option<Cow<'i, str>>, Properties<'pk, 'pv>> {
+    pub fn sections<'a>(&'a self) -> Keys<'a, Option<String>, Properties> {
         self.sections.keys()
     }
 
     /// Set key-value to a section
-    pub fn set_to(&mut self, section: Option<&'i str>, key: &'pk str, value: &'pv str) {
+    pub fn set_to(&mut self, section: Option<String>, key: String, value: String) {
         self.with_section(section).set(key, value);
     }
 
     /// Get the value from a section with key
-    pub fn get_from<'a>(&'a self, section: Option<&'a str>, key: &str) -> Option<&'a str> {
+    pub fn get_from<'a>(&'a self, section: Option<String>, key: &str) -> Option<&'a str> {
         match self.sections.get(&section.map(|s| s.into())) {
             None => None,
             Some(ref prop) => {
@@ -210,23 +221,21 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 
     /// Get the mutable from a section with key
-    pub fn get_from_mut<'a: 'i>(&'a mut self, section: Option<&'a str>, key: &'pk str)
-            -> Option<&'i mut Cow<'pv, str>> {
+    pub fn get_from_mut<'a>(&'a mut self, section: Option<String>, key: &str) -> Option<&'a str> {
         match self.sections.get_mut(&section.map(|s| s.into())) {
             None => None,
             Some(mut prop) => {
-                let key: Cow<'pk, str> = key.into();
-                prop.get_mut(&key)
+                prop.get_mut(key).map(|s| &s[..])
             }
         }
     }
 
     /// Delete a section, return the properties if it exists
-    pub fn delete(&mut self, section: Option<&'i str>) -> Option<Properties<'pk, 'pv>> {
+    pub fn delete(&mut self, section: Option<String>) -> Option<Properties> {
         self.sections.remove(&section.map(|s| s.into()))
     }
 
-    pub fn delete_from(&mut self, section: Option<&'i str>, key: &str) -> Option<Cow<'pv, str>> {
+    pub fn delete_from(&mut self, section: Option<String>, key: &str) -> Option<String> {
         match self.section_mut(section) {
             None => return None,
             Some(prop) => prop.remove(key),
@@ -234,30 +243,30 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 }
 
-impl<'i, 'pk: 'i, 'pv: 'i, 'q> Index<&'q Option<&'q str>> for Ini<'i, 'pk, 'pv> {
-    type Output = Properties<'pk, 'pv>;
+impl<'q> Index<&'q Option<String>> for Ini {
+    type Output = Properties;
 
-    fn index<'a>(&'a self, index: &Option<&'q str>) -> &'a Properties<'pk, 'pv> {
-        match self.sections.get(&index.map(|s| s.into())) {
+    fn index<'a>(&'a self, index: &'q Option<String>) -> &'a Properties {
+        match self.sections.get(index) {
             Some(p) => p,
             None => panic!("Section `{:?}` does not exists", index),
         }
     }
 }
 
-impl<'i, 'pk: 'i, 'pv: 'i> IndexMut<&'i Option<&'i str>> for Ini<'i, 'pk, 'pv> {
-    fn index_mut<'a>(&'a mut self, index: &Option<&'i str>) -> &'a mut Properties<'pk, 'pv> {
-        match self.sections.get_mut(&index.map(|s| s.into())) {
+impl<'i> IndexMut<&'i Option<String>> for Ini {
+    fn index_mut<'a>(&'a mut self, index: &Option<String>) -> &'a mut Properties {
+        match self.sections.get_mut(index) {
             Some(p) => p,
             None => panic!("Section `{:?}` does not exists", index)
         }
     }
 }
 
-impl<'q, 'pk: 'q, 'pv: 'q> Index<&'q str> for Ini<'q, 'pk, 'pv> {
-    type Output = Properties<'pk, 'pv>;
+impl<'q> Index<&'q str> for Ini {
+    type Output = Properties;
 
-    fn index<'a>(&'a self, index: &'q str) -> &'a Properties<'pk, 'pv> {
+    fn index<'a>(&'a self, index: &'q str) -> &'a Properties {
         match self.sections.get(&Some(index.into())) {
             Some(p) => p,
             None => panic!("Section `{}` does not exists", index),
@@ -265,8 +274,8 @@ impl<'q, 'pk: 'q, 'pv: 'q> Index<&'q str> for Ini<'q, 'pk, 'pv> {
     }
 }
 
-impl<'q, 'pk: 'q, 'pv: 'q> IndexMut<&'q str> for Ini<'q, 'pk, 'pv> {
-    fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties<'pk, 'pv> {
+impl<'q> IndexMut<&'q str> for Ini{
+    fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties {
         match self.sections.get_mut(&Some(index.into())) {
             Some(p) => p,
             None => panic!("Section `{}` does not exists", index)
@@ -274,15 +283,15 @@ impl<'q, 'pk: 'q, 'pv: 'q> IndexMut<&'q str> for Ini<'q, 'pk, 'pv> {
     }
 }
 
-impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+impl Ini {
     /// Write to a file
-    pub fn write_to_file(&'i self, filename: &str) -> io::Result<()> {
+    pub fn write_to_file(&self, filename: &str) -> io::Result<()> {
         let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&Path::new(filename)));
         self.write_to(&mut file)
     }
 
     /// Write to a writer
-    pub fn write_to<W: Write>(&'i self, writer: &mut W) -> io::Result<()> {
+    pub fn write_to<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         let mut firstline = true;
 
         match self.sections.get(&None) {
@@ -319,15 +328,15 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 }
 
-impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
+impl Ini {
     /// Load from a string
-    pub fn load_from_str(buf: &str) -> Result<Ini<'i, 'pk, 'pv>, Error> {
+    pub fn load_from_str(buf: &str) -> Result<Ini, Error> {
         let mut parser = Parser::new(buf.chars());
         parser.parse()
     }
 
     /// Load from a reader
-    pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini<'i, 'pk, 'pv>, Error> {
+    pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini, Error> {
         let mut s = String::new();
         try!(reader.read_to_string(&mut s).map_err(|err| Error {
             line: 0,
@@ -339,7 +348,7 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
     }
 
     /// Load from a file
-    pub fn load_from_file(filename : &str) -> Result<Ini<'i, 'pk, 'pv>, Error> {
+    pub fn load_from_file(filename : &str) -> Result<Ini, Error> {
         let mut reader = match File::open(&Path::new(filename)) {
             Err(e) => {
                 return Err(Error {line: 0, col: 0, msg: format!("Unable to open `{}`: {}", filename, e)})
@@ -351,41 +360,41 @@ impl<'i, 'pk: 'i, 'pv: 'i> Ini<'i, 'pk, 'pv> {
 }
 
 /// Iterator for sections
-pub struct SectionIterator<'a, 'pk: 'a, 'pv: 'a> {
-    mapiter: Iter<'a, Option<Cow<'a, str>>, Properties<'pk, 'pv>>
+pub struct SectionIterator<'a> {
+    mapiter: Iter<'a, Option<String>, Properties>
 }
 
 /// Iterator for mutable sections
-pub struct SectionMutIterator<'a, 'pk: 'a, 'pv: 'a> {
-    mapiter: IterMut<'a, Option<Cow<'a, str>>, Properties<'pk, 'pv>>
+pub struct SectionMutIterator<'a> {
+    mapiter: IterMut<'a, Option<String>, Properties>
 }
 
-impl<'a, 'pk: 'a, 'pv: 'a> Ini<'a, 'pk, 'pv> {
+impl<'a> Ini {
     /// Immutable iterate though sections
-    pub fn iter(&'a self) -> SectionIterator<'a, 'pk, 'pv> {
+    pub fn iter(&'a self) -> SectionIterator<'a> {
         SectionIterator { mapiter: self.sections.iter() }
     }
 
     /// Mutable iterate though sections
-    pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a, 'pk, 'pv> {
+    pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a> {
         SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
 }
 
-impl<'a, 'pk: 'a, 'pv: 'a> Iterator for SectionIterator<'a, 'pk, 'pv> {
-    type Item = (&'a Option<Cow<'a, str>>, &'a Properties<'pk, 'pv>);
+impl<'a> Iterator for SectionIterator<'a> {
+    type Item = (&'a Option<String>, &'a Properties);
 
     #[inline]
-    fn next(&mut self) -> Option<(&'a Option<Cow<'a, str>>, &'a Properties<'pk, 'pv>)> {
+    fn next(&mut self) -> Option<(&'a Option<String>, &'a Properties)> {
         self.mapiter.next()
     }
 }
 
-impl<'a, 'pk: 'a, 'pv: 'a> Iterator<> for SectionMutIterator<'a, 'pk, 'pv> {
-    type Item = (&'a Option<Cow<'a, str>>, &'a mut Properties<'pk, 'pv>);
+impl<'a> Iterator<> for SectionMutIterator<'a> {
+    type Item = (&'a Option<String>, &'a mut Properties);
 
     #[inline]
-    fn next(&mut self) -> Option<(&'a Option<Cow<'a, str>>, &'a mut Properties<'pk, 'pv>)> {
+    fn next(&mut self) -> Option<(&'a Option<String>, &'a mut Properties)> {
         self.mapiter.next()
     }
 }
@@ -456,11 +465,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse<'i, 'pk: 'i, 'pv: 'i>(&mut self) -> Result<Ini<'i, 'pk, 'pv>, Error> {
+    pub fn parse(&mut self) -> Result<Ini, Error> {
         self.parse_whitespace();
         let mut result = Ini::new();
-        let mut curkey: Cow<'pk, str> = "".into();
-        let mut cursec: Option<Cow<'i, str>> = None;
+        let mut curkey: String = "".into();
+        let mut cursec: Option<String> = None;
         self.parse_whitespace();
         while let Some(cur_ch) = self.ch {
             debug!("line:{}, col:{}", self.line, self.col);
@@ -474,7 +483,7 @@ impl<'a> Parser<'a> {
                         Ok(sec) => {
                             let msec = &sec[..].trim();
                             debug!("Got section: {}", msec);
-                            cursec = Some(Cow::Owned(msec.to_string()));
+                            cursec = Some(msec.to_string());
                             result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             self.bump();
                         },
@@ -490,7 +499,7 @@ impl<'a> Parser<'a> {
                             let mval = val[..].trim().to_owned();
                             debug!("Got value: {}", mval);
                             let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
-                            sec.insert(curkey, Cow::Owned(mval));
+                            sec.insert(curkey, mval);
                             curkey = "".into();
                             self.bump();
                         },
@@ -593,8 +602,6 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::borrow::Cow;
-
     use ini::*;
 
     #[test]
@@ -609,13 +616,13 @@ mod test {
 
         let sec1 = &output.sections[&Some("sec1".into())];
         assert_eq!(sec1.len(), 2);
-        let key1: Cow<'static, str> = "key1".into();
+        let key1: String = "key1".into();
         assert!(sec1.contains_key(&key1));
-        let key2: Cow<'static, str> = "key2".into();
+        let key2: String = "key2".into();
         assert!(sec1.contains_key(&key2));
-        let val1: Cow<'static, str> = "val1".into();
+        let val1: String = "val1".into();
         assert_eq!(sec1[&key1], val1);
-        let val2: Cow<'static, str> = "377".into();
+        let val2: String = "377".into();
         assert_eq!(sec1[&key2], val2);
 
     }
