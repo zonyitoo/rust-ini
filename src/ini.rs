@@ -125,11 +125,9 @@ impl<'a> SectionSetter<'a> {
         where String: Borrow<K>,
               K: Hash + Eq
     {
-        let prop = match self.ini.sections.entry(self.section_name.clone()) {
-            Entry::Vacant(entry) => entry.insert(HashMap::new()),
-            Entry::Occupied(entry) => entry.into_mut(),
-        };
-        prop.get(key).map(|s| &s[..])
+        self.ini.sections
+            .get(&self.section_name)
+            .and_then(|prop| prop.get(key).map(|s| &s[..]))
     }
 }
 

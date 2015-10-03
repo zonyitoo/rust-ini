@@ -33,11 +33,11 @@ Usage
         let mut conf = Ini::new();
         conf.with_section(None)
             .set("encoding", "utf-8");
-        conf.with_section(Some("User"))
+        conf.with_section(Some("User".to_owned()))
             .set("given_name", "Tommy")
             .set("family_name", "Green")
             .set("unicode", "Raspberry树莓");
-        conf.with_section(Some("Book"))
+        conf.with_section(Some("Book".to_owned()))
             .set("name", "Rust cool");
         conf.write_to_file("conf.ini").unwrap();
     }
@@ -66,7 +66,7 @@ Then you will get ``conf.ini``
     fn main() {
         let conf = Ini::load_from_file("conf.ini").unwrap();
 
-        let section = conf.section(Some("User")).unwrap();
+        let section = conf.section(Some("User".to_owned())).unwrap();
         let tommy = section.get("given_name").unwrap();
         let green = section.get("family_name").unwrap();
 
