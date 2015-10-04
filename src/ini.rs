@@ -148,27 +148,33 @@ impl Ini {
     }
 
     /// Set with a specified section, `None` is for the general section
-    pub fn with_section<'b>(&'b mut self, section: Option<String>) -> SectionSetter<'b> {
+    pub fn with_section<'b, S>(&'b mut self, section: Option<S>) -> SectionSetter<'b>
+        where S: Into<String>
+    {
         SectionSetter::new(self, section.map(|s| s.into()))
     }
 
     /// Get the immmutable general section
     pub fn general_section(&self) -> &Properties {
-        self.section(None).expect("There is no general section in this Ini")
+        self.section(None::<String>).expect("There is no general section in this Ini")
     }
 
     /// Get the mutable general section
     pub fn general_section_mut(&mut self) -> &mut Properties {
-        self.section_mut(None).expect("There is no general section in this Ini")
+        self.section_mut(None::<String>).expect("There is no general section in this Ini")
     }
 
     /// Get a immutable section
-    pub fn section<'a, 'p>(&'a self, name: Option<String>) -> Option<&'a Properties> {
+    pub fn section<'a, S>(&'a self, name: Option<S>) -> Option<&'a Properties>
+        where S: Into<String>
+    {
         self.sections.get(&name.map(|s| s.into()))
     }
 
     /// Get a mutable section
-    pub fn section_mut<'a>(&'a mut self, name: Option<String>) -> Option<&'a mut Properties> {
+    pub fn section_mut<'a, S>(&'a mut self, name: Option<S>) -> Option<&'a mut Properties>
+        where S: Into<String>
+    {
         self.sections.get_mut(&name.map(|s| s.into()))
     }
 
@@ -188,12 +194,16 @@ impl Ini {
     }
 
     /// Set key-value to a section
-    pub fn set_to(&mut self, section: Option<String>, key: String, value: String) {
+    pub fn set_to<S>(&mut self, section: Option<S>, key: String, value: String)
+        where S: Into<String>
+    {
         self.with_section(section).set(key, value);
     }
 
     /// Get the value from a section with key
-    pub fn get_from<'a>(&'a self, section: Option<String>, key: &str) -> Option<&'a str> {
+    pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
+        where S: Into<String>
+    {
         match self.sections.get(&section.map(|s| s.into())) {
             None => None,
             Some(ref prop) => {
@@ -206,7 +216,9 @@ impl Ini {
     }
 
     /// Get the value from a section with key, return the default value if it does not exists
-    pub fn get_from_or<'a>(&'a self, section: Option<&'a str>, key: &str, default: &'a str) -> &'a str {
+    pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
+        where S: Into<String>
+    {
          match self.sections.get(&section.map(|s| s.into())) {
             None => default,
             Some(ref prop) => {
@@ -219,7 +231,9 @@ impl Ini {
     }
 
     /// Get the mutable from a section with key
-    pub fn get_from_mut<'a>(&'a mut self, section: Option<String>, key: &str) -> Option<&'a str> {
+    pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a str>
+        where S: Into<String>
+    {
         match self.sections.get_mut(&section.map(|s| s.into())) {
             None => None,
             Some(mut prop) => {
@@ -229,11 +243,15 @@ impl Ini {
     }
 
     /// Delete a section, return the properties if it exists
-    pub fn delete(&mut self, section: Option<String>) -> Option<Properties> {
+    pub fn delete<S>(&mut self, section: Option<S>) -> Option<Properties>
+        where S: Into<String>
+    {
         self.sections.remove(&section.map(|s| s.into()))
     }
 
-    pub fn delete_from(&mut self, section: Option<String>, key: &str) -> Option<String> {
+    pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
+        where S: Into<String>
+    {
         match self.section_mut(section) {
             None => return None,
             Some(prop) => prop.remove(key),

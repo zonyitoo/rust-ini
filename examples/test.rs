@@ -9,16 +9,16 @@ const CONF_FILE_NAME: &'static str = "test.ini";
 fn main() {
 
     let mut conf = Ini::new();
-    conf.with_section(None)
+    conf.with_section(None::<String>)
         .set("encoding", "utf-8");
-    conf.with_section(Some("User".to_owned()))
+    conf.with_section(Some("User"))
         .set("name", "Raspberry树莓")
         .set("value", "Pi");
-    conf.with_section(Some("Library".to_owned()))
+    conf.with_section(Some("Library"))
         .set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
 
-    conf.section_mut(Some("Library".to_owned())).unwrap()
+    conf.section_mut(Some("Library")).unwrap()
         .insert("seats".into(), "42".into());
 
     println!("---------------------------------------");
@@ -42,7 +42,7 @@ fn main() {
     }
     println!("");
 
-    let section = i.section(Some("User".to_owned())).unwrap();
+    let section = i.section(Some("User")).unwrap();
     println!("name={}", section.get("name").unwrap());
     println!("conf[{}][{}]={}", "User", "name", i["User"]["name"]);
     println!("General Section: {:?}", i.general_section());
