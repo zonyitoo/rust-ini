@@ -490,7 +490,7 @@ impl<'a> Parser<'a> {
         while let Some(cur_ch) = self.ch {
             debug!("line:{}, col:{}", self.line, self.col);
             match cur_ch {
-                ';' => {
+                ';' | '#' => {
                     self.parse_comment();
                     debug!("parse comment");
                 }
@@ -504,7 +504,7 @@ impl<'a> Parser<'a> {
                             self.bump();
                         },
                         Err(e) => return Err(e),
-                    };
+                    }
                 }
                 '=' => {
                     if (&curkey[..]).is_empty() {
@@ -517,7 +517,6 @@ impl<'a> Parser<'a> {
                             let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             sec.insert(curkey, mval);
                             curkey = "".into();
-                            self.bump();
                         },
                         Err(e) => return Err(e),
                     }
@@ -610,7 +609,7 @@ impl<'a> Parser<'a> {
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_str_until(&[Some('\n'), None])
+        self.parse_str_until(&[Some('\n'), Some(';'), Some('#'), None])
     }
 }
 
@@ -655,5 +654,27 @@ mod test {
         let input = "; abcdefghijklmn\n";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
+    }
+
+    #[test]
+    fn test_inline_comment() {
+        let input = "
+[section name]
+name = hello # abcdefg
+gender = mail ; abdddd
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_sharp_comment() {
+        let input = "
+[section name]
+name = hello
+# abcdefg
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
     }
 }
