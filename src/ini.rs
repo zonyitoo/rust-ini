@@ -34,6 +34,7 @@ use std::str::Chars;
 use std::borrow::Borrow;
 use std::hash::Hash;
 use std::cmp::Eq;
+use std::error;
 
 // Escape non-INI characters
 //
@@ -434,6 +435,16 @@ pub struct Error {
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{} {}", self.line, self.col, self.msg)
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        self.msg.as_str()
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
     }
 }
 
