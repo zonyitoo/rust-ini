@@ -36,6 +36,61 @@ use std::hash::Hash;
 use std::cmp::Eq;
 use std::error;
 
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum EscapePolicy {
+    /// escape absolutely nothing (dangerous)
+    Nothing,
+    /// only escape the most necessary things
+    Basics,
+    /// escape basics and non-ascii characters
+    BasicsUnicode,
+    /// Escape reserved symbols.
+    Reserved,
+    /// Escape reserved symbols and non-ascii characters
+    ReservedUnicode,
+    /// Escape everything that some INI implementations assume
+    Everything,
+}
+
+impl EscapePolicy {
+
+    fn escape_basics(&self) -> bool {
+        match *self {
+            EscapePolicy::Nothing => false,
+            _ => true,
+        }
+    }
+
+    fn escape_reserved(&self) -> bool {
+        match *self {
+            EscapePolicy::Reserved => true,
+            EscapePolicy::ReservedUnicode => true,
+            EscapePolicy::Everything => true,
+            _ => false,
+        }
+    }
+
+    fn escape_unicode(&self) -> bool {
+        match *self {
+            EscapePolicy::BasicsUnicode => true,
+            EscapePolicy::ReservedUnicode => true,
+            EscapePolicy::Everything => true,
+            _ => false,
+        }
+    }
+
+    /// Given a character this returns true if it should be escaped as
+    /// per this policy or false if not.
+    pub fn should_escape(&self, c: char) -> bool {
+        match c {
+            '\\' | '\x00' ... '\x1f' | '\x7f' ... '\u{00ff}' => self.escape_basics(),
+            ';' | '#' | '=' | ':' => self.escape_reserved(),
+            '\u{0080}' ... '\u{FFFF}' => self.escape_unicode(),
+            _ => false,
+        }
+    }
+}
+
 // Escape non-INI characters
 //
 // Common escape sequences: https://en.wikipedia.org/wiki/INI_file#Escape_characters
@@ -52,9 +107,16 @@ use std::error;
 // * `\=` Equals sign
 // * `\:` Colon
 // * `\x????` Unicode character with hexadecimal code point corresponding to ????
-fn escape_str(s: &str) -> String {
+fn escape_str(s: &str, policy: EscapePolicy) -> String {
     let mut escaped: String = String::with_capacity(s.len());
     for c in s.chars() {
+        // if we know this is not something to escape as per policy, we just
+        // write it and continue.
+        if !policy.should_escape(c) {
+            escaped.push(c);
+            continue;
+        }
+
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
@@ -67,15 +129,12 @@ fn escape_str(s: &str) -> String {
             '\n' => escaped.push_str("\\n"),
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
-            ';' => escaped.push_str("\\;"),
-            '#' => escaped.push_str("\\#"),
-            '=' => escaped.push_str("\\="),
-            ':' => escaped.push_str("\\:"),
             '\u{0080}' ... '\u{FFFF}' =>
                 escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
-
-            // FIXME: Ini files does not support unicode code point in \u{100000} to \u{10FFFF}
-            _ => escaped.push(c)
+            _ => {
+                escaped.push('\\');
+                escaped.push(c);
+            }
         }
     }
     escaped
@@ -304,19 +363,29 @@ impl<'q> IndexMut<&'q str> for Ini{
 impl Ini {
     /// Write to a file
     pub fn write_to_file(&self, filename: &str) -> io::Result<()> {
+        self.write_to_file_policy(filename, EscapePolicy::Basics)
+    }
+
+    /// Write to a file
+    pub fn write_to_file_policy(&self, filename: &str, policy: EscapePolicy) -> io::Result<()> {
         let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&Path::new(filename)));
-        self.write_to(&mut file)
+        self.write_to_policy(&mut file, policy)
     }
 
     /// Write to a writer
     pub fn write_to<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.write_to_policy(writer, EscapePolicy::Basics)
+    }
+
+    /// Write to a writer
+    pub fn write_to_policy<W: Write>(&self, writer: &mut W, policy: EscapePolicy) -> io::Result<()> {
         let mut firstline = true;
 
         match self.sections.get(&None) {
             Some(props) => {
                 for (k, v) in props.iter() {
-                    let k_str = escape_str(&k[..]);
-                    let v_str = escape_str(&v[..]);
+                    let k_str = escape_str(&k[..], policy);
+                    let v_str = escape_str(&v[..], policy);
                     try!(write!(writer, "{}={}\n", k_str, v_str));
                 }
                 firstline = false;
@@ -333,11 +402,11 @@ impl Ini {
             }
 
             if let &Some(ref section) = section {
-                try!(write!(writer, "[{}]\n", escape_str(&section[..])));
+                try!(write!(writer, "[{}]\n", escape_str(&section[..], policy)));
 
                 for (k, v) in props.iter() {
-                    let k_str = escape_str(&k[..]);
-                    let v_str = escape_str(&v[..]);
+                    let k_str = escape_str(&k[..], policy);
+                    let v_str = escape_str(&v[..], policy);
                     try!(write!(writer, "{}={}\n", k_str, v_str));
                 }
             }
