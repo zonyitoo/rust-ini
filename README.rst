@@ -1,4 +1,4 @@
-INI in RUST
+INI in Rust
 -----------
 
 .. image:: https://travis-ci.org/zonyitoo/rust-ini.svg?branch=master
@@ -81,7 +81,7 @@ Then you will get ``conf.ini``
         }
     }
 
-* More details could be found in ``examples``.
+* More details could be found in `examples`.
 
 License
 =======
