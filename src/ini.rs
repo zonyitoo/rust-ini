@@ -276,7 +276,7 @@ impl Ini {
         }
     }
 
-    /// Get the value from a section with key, return the default value if it does not exists
+    /// Get the value from a section with key, return the default value if it does not exist
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
         where S: Into<String>
     {
@@ -324,7 +324,7 @@ impl<'q> Index<&'q Option<String>> for Ini {
     fn index<'a>(&'a self, index: &'q Option<String>) -> &'a Properties {
         match self.sections.get(index) {
             Some(p) => p,
-            None => panic!("Section `{:?}` does not exists", index),
+            None => panic!("Section `{:?}` does not exist", index),
         }
     }
 }
@@ -333,7 +333,7 @@ impl<'i> IndexMut<&'i Option<String>> for Ini {
     fn index_mut<'a>(&'a mut self, index: &Option<String>) -> &'a mut Properties {
         match self.sections.get_mut(index) {
             Some(p) => p,
-            None => panic!("Section `{:?}` does not exists", index),
+            None => panic!("Section `{:?}` does not exist", index),
         }
     }
 }
@@ -344,7 +344,7 @@ impl<'q> Index<&'q str> for Ini {
     fn index<'a>(&'a self, index: &'q str) -> &'a Properties {
         match self.sections.get(&Some(index.into())) {
             Some(p) => p,
-            None => panic!("Section `{}` does not exists", index),
+            None => panic!("Section `{}` does not exist", index),
         }
     }
 }
@@ -353,7 +353,7 @@ impl<'q> IndexMut<&'q str> for Ini {
     fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties {
         match self.sections.get_mut(&Some(index.into())) {
             Some(p) => p,
-            None => panic!("Section `{}` does not exists", index),
+            None => panic!("Section `{}` does not exist", index),
         }
     }
 }
