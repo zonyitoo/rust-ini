@@ -22,7 +22,7 @@
 //! Ini
 
 use std::collections::HashMap;
-use std::collections::hash_map::{Iter, IterMut, Keys};
+use std::collections::hash_map::{Iter, IterMut, IntoIter, Keys};
 use std::collections::hash_map::Entry;
 use std::fs::{OpenOptions, File};
 use std::ops::{Index, IndexMut};
@@ -53,7 +53,6 @@ pub enum EscapePolicy {
 }
 
 impl EscapePolicy {
-
     fn escape_basics(&self) -> bool {
         match *self {
             EscapePolicy::Nothing => false,
@@ -83,9 +82,11 @@ impl EscapePolicy {
     /// per this policy or false if not.
     pub fn should_escape(&self, c: char) -> bool {
         match c {
-            '\\' | '\x00' ... '\x1f' | '\x7f' ... '\u{00ff}' => self.escape_basics(),
+            '\\' |
+            '\x00'...'\x1f' |
+            '\x7f'...'\u{00ff}' => self.escape_basics(),
             ';' | '#' | '=' | ':' => self.escape_reserved(),
-            '\u{0080}' ... '\u{FFFF}' => self.escape_unicode(),
+            '\u{0080}'...'\u{FFFF}' => self.escape_unicode(),
             _ => false,
         }
     }
@@ -120,8 +121,9 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01' ... '\x06' | '\x0e' ... '\x1f' | '\x7f' ... '\u{00ff}' =>
-                escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
+            '\x01'...'\x06' |
+            '\x0e'...'\x1f' |
+            '\x7f'...'\u{00ff}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
             '\x0c' => escaped.push_str("\\f"),
@@ -129,8 +131,7 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
             '\n' => escaped.push_str("\\n"),
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
-            '\u{0080}' ... '\u{FFFF}' =>
-                escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
+            '\u{0080}'...'\u{FFFF}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
             _ => {
                 escaped.push('\\');
                 escaped.push(c);
@@ -185,7 +186,8 @@ impl<'a> SectionSetter<'a> {
         where String: Borrow<K>,
               K: Hash + Eq
     {
-        self.ini.sections
+        self.ini
+            .sections
             .get(&self.section_name)
             .and_then(|prop| prop.get(key).map(|s| &s[..]))
     }
@@ -203,9 +205,7 @@ pub struct Ini {
 impl Ini {
     /// Create an instance
     pub fn new() -> Ini {
-        Ini {
-            sections: HashMap::new(),
-        }
+        Ini { sections: HashMap::new() }
     }
 
     /// Set with a specified section, `None` is for the general section
@@ -270,7 +270,7 @@ impl Ini {
             Some(ref prop) => {
                 match prop.get(key) {
                     Some(p) => Some(&p[..]),
-                    None => None
+                    None => None,
                 }
             }
         }
@@ -280,12 +280,12 @@ impl Ini {
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
         where S: Into<String>
     {
-         match self.sections.get(&section.map(|s| s.into())) {
+        match self.sections.get(&section.map(|s| s.into())) {
             None => default,
             Some(ref prop) => {
                 match prop.get(key) {
                     Some(p) => &p[..],
-                    None => default
+                    None => default,
                 }
             }
         }
@@ -297,9 +297,7 @@ impl Ini {
     {
         match self.sections.get_mut(&section.map(|s| s.into())) {
             None => None,
-            Some(mut prop) => {
-                prop.get_mut(key).map(|s| &s[..])
-            }
+            Some(mut prop) => prop.get_mut(key).map(|s| &s[..]),
         }
     }
 
@@ -335,7 +333,7 @@ impl<'i> IndexMut<&'i Option<String>> for Ini {
     fn index_mut<'a>(&'a mut self, index: &Option<String>) -> &'a mut Properties {
         match self.sections.get_mut(index) {
             Some(p) => p,
-            None => panic!("Section `{:?}` does not exists", index)
+            None => panic!("Section `{:?}` does not exists", index),
         }
     }
 }
@@ -351,11 +349,11 @@ impl<'q> Index<&'q str> for Ini {
     }
 }
 
-impl<'q> IndexMut<&'q str> for Ini{
+impl<'q> IndexMut<&'q str> for Ini {
     fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties {
         match self.sections.get_mut(&Some(index.into())) {
             Some(p) => p,
-            None => panic!("Section `{}` does not exists", index)
+            None => panic!("Section `{}` does not exists", index),
         }
     }
 }
@@ -368,7 +366,11 @@ impl Ini {
 
     /// Write to a file
     pub fn write_to_file_policy(&self, filename: &str, policy: EscapePolicy) -> io::Result<()> {
-        let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&Path::new(filename)));
+        let mut file = try!(OpenOptions::new()
+                                .write(true)
+                                .truncate(true)
+                                .create(true)
+                                .open(&Path::new(filename)));
         self.write_to_policy(&mut file, policy)
     }
 
@@ -378,7 +380,10 @@ impl Ini {
     }
 
     /// Write to a writer
-    pub fn write_to_policy<W: Write>(&self, writer: &mut W, policy: EscapePolicy) -> io::Result<()> {
+    pub fn write_to_policy<W: Write>(&self,
+                                     writer: &mut W,
+                                     policy: EscapePolicy)
+                                     -> io::Result<()> {
         let mut firstline = true;
 
         match self.sections.get(&None) {
@@ -389,15 +394,14 @@ impl Ini {
                     try!(write!(writer, "{}={}\n", k_str, v_str));
                 }
                 firstline = false;
-            },
+            }
             None => {}
         }
 
         for (section, props) in self.sections.iter().filter(|&(ref s, _)| s.is_some()) {
             if firstline {
                 firstline = false;
-            }
-            else {
+            } else {
                 try!(writer.write_all(b"\n"));
             }
 
@@ -425,22 +429,28 @@ impl Ini {
     /// Load from a reader
     pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini, Error> {
         let mut s = String::new();
-        try!(reader.read_to_string(&mut s).map_err(|err| Error {
-            line: 0,
-            col: 0,
-            msg: format!("{}", err),
+        try!(reader.read_to_string(&mut s).map_err(|err| {
+            Error {
+                line: 0,
+                col: 0,
+                msg: format!("{}", err),
+            }
         }));
         let mut parser = Parser::new(s.chars());
         parser.parse()
     }
 
     /// Load from a file
-    pub fn load_from_file(filename : &str) -> Result<Ini, Error> {
+    pub fn load_from_file(filename: &str) -> Result<Ini, Error> {
         let mut reader = match File::open(&Path::new(filename)) {
             Err(e) => {
-                return Err(Error {line: 0, col: 0, msg: format!("Unable to open `{}`: {}", filename, e)})
+                return Err(Error {
+                    line: 0,
+                    col: 0,
+                    msg: format!("Unable to open `{}`: {}", filename, e),
+                })
             }
-            Ok(r) => r
+            Ok(r) => r,
         };
         Ini::read_from(&mut reader)
     }
@@ -448,12 +458,12 @@ impl Ini {
 
 /// Iterator for sections
 pub struct SectionIterator<'a> {
-    mapiter: Iter<'a, Option<String>, Properties>
+    mapiter: Iter<'a, Option<String>, Properties>,
 }
 
 /// Iterator for mutable sections
 pub struct SectionMutIterator<'a> {
-    mapiter: IterMut<'a, Option<String>, Properties>
+    mapiter: IterMut<'a, Option<String>, Properties>,
 }
 
 impl<'a> Ini {
@@ -477,12 +487,41 @@ impl<'a> Iterator for SectionIterator<'a> {
     }
 }
 
-impl<'a> Iterator<> for SectionMutIterator<'a> {
+impl<'a> Iterator for SectionMutIterator<'a> {
     type Item = (&'a Option<String>, &'a mut Properties);
 
     #[inline]
     fn next(&mut self) -> Option<(&'a Option<String>, &'a mut Properties)> {
         self.mapiter.next()
+    }
+}
+
+impl<'a> IntoIterator for &'a Ini {
+    type Item = (&'a Option<String>, &'a Properties);
+    type IntoIter = SectionIterator<'a>;
+
+    fn into_iter(self) -> SectionIterator<'a> {
+        self.iter()
+    }
+}
+
+pub struct SectionIntoIter {
+    iter: IntoIter<Option<String>, Properties>,
+}
+
+impl Iterator for SectionIntoIter {
+    type Item = (Option<String>, Properties);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+impl IntoIterator for Ini {
+    type Item = (Option<String>, Properties);
+    type IntoIter = SectionIntoIter;
+
+    fn into_iter(self) -> SectionIntoIter {
+        SectionIntoIter { iter: self.sections.into_iter() }
     }
 }
 
@@ -541,16 +580,20 @@ impl<'a> Parser<'a> {
             Some('\n') => {
                 self.line += 1;
                 self.col = 0;
-            },
+            }
             Some(..) => {
                 self.col += 1;
             }
-            None => {},
+            None => {}
         }
     }
 
     fn error<U>(&self, msg: String) -> Result<U, Error> {
-        Err(Error { line: self.line, col: self.col, msg: msg.clone() })
+        Err(Error {
+            line: self.line,
+            col: self.col,
+            msg: msg.clone(),
+        })
     }
 
     fn parse_whitespace(&mut self) {
@@ -583,7 +626,7 @@ impl<'a> Parser<'a> {
                             cursec = Some(msec.to_string());
                             result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             self.bump();
-                        },
+                        }
                         Err(e) => return Err(e),
                     }
                 }
@@ -595,10 +638,12 @@ impl<'a> Parser<'a> {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
                             debug!("Got value: {}", mval);
-                            let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
+                            let sec = result.sections
+                                            .entry(cursec.clone())
+                                            .or_insert(HashMap::new());
                             sec.insert(curkey, mval);
                             curkey = "".into();
-                        },
+                        }
                         Err(e) => return Err(e),
                     }
                 }
@@ -620,8 +665,13 @@ impl<'a> Parser<'a> {
         Ok(result)
     }
 
-    fn parse_comment(&mut self)  {
-        while let Some(c) = self.ch { self.bump(); if c == '\n' { break; }  }
+    fn parse_comment(&mut self) {
+        while let Some(c) = self.ch {
+            self.bump();
+            if c == '\n' {
+                break;
+            }
+        }
     }
 
     fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
@@ -630,7 +680,7 @@ impl<'a> Parser<'a> {
             match self.ch {
                 None => {
                     return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
-                },
+                }
                 Some('\\') => {
                     self.bump();
                     if self.eof() {
@@ -650,12 +700,14 @@ impl<'a> Parser<'a> {
                             for _ in 0..4 {
                                 self.bump();
                                 if self.eof() {
-                                    return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
-                                }
-                                else if let Some('\\') = self.ch {
+                                    return self.error(format!("Expecting \"{:?}\" but found EOF.",
+                                                              endpoint));
+                                } else if let Some('\\') = self.ch {
                                     self.bump();
                                     if self.ch != Some('\n') {
-                                        return self.error(format!("Expecting \"\\\\n\" but found \"{:?}\".", self.ch));
+                                        return self.error(format!("Expecting \"\\\\n\" but \
+                                                                   found \"{:?}\".",
+                                                                  self.ch));
                                     }
                                 }
                                 code.push(self.ch.unwrap());
@@ -663,12 +715,12 @@ impl<'a> Parser<'a> {
                             let r = u32::from_str_radix(&code[..], 16);
                             match r {
                                 Ok(c) => result.push(char::from_u32(c).unwrap()),
-                                Err(_) => return self.error("Unknown character.".to_string())
+                                Err(_) => return self.error("Unknown character.".to_string()),
                             }
                         }
-                        c => result.push(c)
+                        c => result.push(c),
                     }
-                },
+                }
                 Some(c) => {
                     result.push(c);
                 }
@@ -694,7 +746,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod test {
@@ -757,5 +809,18 @@ name = hello
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_iter() {
+        let input = "
+[section name]
+name = hello # abcdefg
+gender = mail ; abdddd
+";
+        let ini = Ini::load_from_str(input).unwrap();
+
+        for (_, _) in &ini {}
+        for (_, _) in ini {}
     }
 }
