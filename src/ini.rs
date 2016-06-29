@@ -473,7 +473,13 @@ impl<'a> Ini {
     }
 
     /// Mutable iterate though sections
+    /// *Deprecated! Use `iter_mut` instead!*
     pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a> {
+        SectionMutIterator { mapiter: self.sections.iter_mut() }
+    }
+
+    /// Mutable iterate though sections
+    pub fn iter_mut(&'a mut self) -> SectionMutIterator<'a> {
         SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
 }
@@ -502,6 +508,15 @@ impl<'a> IntoIterator for &'a Ini {
 
     fn into_iter(self) -> SectionIterator<'a> {
         self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Ini {
+    type Item = (&'a Option<String>, &'a mut Properties);
+    type IntoIter = SectionMutIterator<'a>;
+
+    fn into_iter(self) -> SectionMutIterator<'a> {
+        self.iter_mut()
     }
 }
 
@@ -818,8 +833,9 @@ name = hello
 name = hello # abcdefg
 gender = mail ; abdddd
 ";
-        let ini = Ini::load_from_str(input).unwrap();
+        let mut ini = Ini::load_from_str(input).unwrap();
 
+        for (_, _) in &mut ini {}
         for (_, _) in &ini {}
         for (_, _) in ini {}
     }
