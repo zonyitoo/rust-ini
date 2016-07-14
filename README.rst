@@ -73,9 +73,9 @@ Then you will get ``conf.ini``
         println!("{:?} {:?}", tommy, green);
 
         // iterating
-        for (sec, prop) in conf.iter() {
+        for (sec, prop) in &conf {
             println!("Section: {:?}", sec);
-            for (key, value) in prop.iter() {
+            for (key, value) in &prop {
                 println!("{:?}:{:?}", key, value);
             }
         }
