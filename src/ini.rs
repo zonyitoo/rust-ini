@@ -645,7 +645,7 @@ impl<'a> Parser<'a> {
                         Err(e) => return Err(e),
                     }
                 }
-                '=' => {
+                '=' | ':' => {
                     if (&curkey[..]).is_empty() {
                         return self.error("Missing key".to_string());
                     }
@@ -752,7 +752,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_key(&mut self) -> Result<String, Error> {
-        self.parse_str_until(&[Some('=')])
+        self.parse_str_until(&[Some('='), Some(':')])
     }
 
     fn parse_val(&mut self) -> Result<String, Error> {
@@ -838,5 +838,17 @@ gender = mail ; abdddd
         for (_, _) in &mut ini {}
         for (_, _) in &ini {}
         for (_, _) in ini {}
+    }
+
+    #[test]
+    fn test_colon() {
+        let input = "
+[section name]
+name: hello # abcdefg
+gender : mail ; abdddd
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
+        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
     }
 }
