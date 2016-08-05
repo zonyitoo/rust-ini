@@ -621,7 +621,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Result<Ini, Error> {
-        self.parse_whitespace();
         let mut result = Ini::new();
         let mut curkey: String = "".into();
         let mut cursec: Option<String> = None;
