@@ -611,6 +611,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Consume all the white space until the end of the line or a tab
     fn parse_whitespace(&mut self) {
         while let Some(c) = self.ch {
             if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
@@ -624,6 +625,7 @@ impl<'a> Parser<'a> {
         let mut result = Ini::new();
         let mut curkey: String = "".into();
         let mut cursec: Option<String> = None;
+
         self.parse_whitespace();
         while let Some(cur_ch) = self.ch {
             debug!("line:{}, col:{}", self.line, self.col);
@@ -690,6 +692,7 @@ impl<'a> Parser<'a> {
 
     fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
         let mut result: String = String::new();
+
         while !endpoint.contains(&self.ch) {
             match self.ch {
                 None => {
@@ -734,6 +737,12 @@ impl<'a> Parser<'a> {
                         }
                         c => result.push(c),
                     }
+                }
+                Some('"') => {
+                    self.bump();
+                    let string = try!(self.parse_str_until(&[Some('"')]));
+                    result.push_str(&*string);
+                    // self.bump();
                 }
                 Some(c) => {
                     result.push(c);
