@@ -742,7 +742,11 @@ impl<'a> Parser<'a> {
                     self.bump();
                     let string = try!(self.parse_str_until(&[Some('"')]));
                     result.push_str(&*string);
-                    // self.bump();
+                }
+                Some('\'') => {
+                    self.bump();
+                    let string = try!(self.parse_str_until(&[Some('\'')]));
+                    result.push_str(&*string);
                 }
                 Some(c) => {
                     result.push(c);
@@ -889,6 +893,43 @@ Otherline\"
 [section name]
 # This is a comment
 Key = \"Value   # This is not a comment\"
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment");
+    }
+
+    #[test]
+    fn test_string_single() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value'
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value");
+    }
+
+    #[test]
+    fn test_string_single_multiline() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value
+Otherline'
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
+    }
+
+    #[test]
+    fn test_string_single_comment() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value   # This is not a comment'
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment");
