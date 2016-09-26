@@ -611,6 +611,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Consume all the white space until the end of the line or a tab
     fn parse_whitespace(&mut self) {
         while let Some(c) = self.ch {
             if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
@@ -624,6 +625,7 @@ impl<'a> Parser<'a> {
         let mut result = Ini::new();
         let mut curkey: String = "".into();
         let mut cursec: Option<String> = None;
+
         self.parse_whitespace();
         while let Some(cur_ch) = self.ch {
             debug!("line:{}, col:{}", self.line, self.col);
@@ -690,6 +692,7 @@ impl<'a> Parser<'a> {
 
     fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
         let mut result: String = String::new();
+
         while !endpoint.contains(&self.ch) {
             match self.ch {
                 None => {
@@ -734,6 +737,16 @@ impl<'a> Parser<'a> {
                         }
                         c => result.push(c),
                     }
+                }
+                Some('"') => {
+                    self.bump();
+                    let string = try!(self.parse_str_until(&[Some('"')]));
+                    result.push_str(&*string);
+                }
+                Some('\'') => {
+                    self.bump();
+                    let string = try!(self.parse_str_until(&[Some('\'')]));
+                    result.push_str(&*string);
                 }
                 Some(c) => {
                     result.push(c);
@@ -849,5 +862,76 @@ gender : mail ; abdddd
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
         assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
+    }
+
+    #[test]
+    fn test_string() {
+        let input = "
+[section name]
+# This is a comment
+Key = \"Value\"
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value");
+    }
+
+    #[test]
+    fn test_string_multiline() {
+        let input = "
+[section name]
+# This is a comment
+Key = \"Value
+Otherline\"
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
+    }
+
+    #[test]
+    fn test_string_comment() {
+        let input = "
+[section name]
+# This is a comment
+Key = \"Value   # This is not a comment ; at all\"
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
+    }
+
+    #[test]
+    fn test_string_single() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value'
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value");
+    }
+
+    #[test]
+    fn test_string_single_multiline() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value
+Otherline'
+Stuff = Other
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
+    }
+
+    #[test]
+    fn test_string_single_comment() {
+        let input = "
+[section name]
+# This is a comment
+Key = 'Value   # This is not a comment ; at all'
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
     }
 }
