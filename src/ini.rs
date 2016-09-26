@@ -262,6 +262,15 @@ impl Ini {
     }
 
     /// Get the value from a section with key
+    ///
+    /// Example:
+    ///
+    /// ```
+    ///! use ini::Ini;
+    /// let input = "[sec]\nabc = def\n";
+    /// let ini = Ini::load_from_str(input).unwrap();
+    /// assert_eq!(ini.get_from(Some("sec"), "abc"), Some("def"));
+    /// ```
     pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
         where S: Into<String>
     {
@@ -277,6 +286,15 @@ impl Ini {
     }
 
     /// Get the value from a section with key, return the default value if it does not exist
+    ///
+    /// Example:
+    ///
+    /// ```
+    ///! use ini::Ini;
+    /// let input = "[sec]\n";
+    /// let ini = Ini::load_from_str(input).unwrap();
+    /// assert_eq!(ini.get_from_or(Some("sec"), "key", "default"), "default");
+    /// ```
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
         where S: Into<String>
     {
