@@ -892,11 +892,11 @@ Otherline\"
         let input = "
 [section name]
 # This is a comment
-Key = \"Value   # This is not a comment\"
+Key = \"Value   # This is not a comment ; at all\"
 Stuff = Other
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
     }
 
     #[test]
@@ -929,9 +929,9 @@ Stuff = Other
         let input = "
 [section name]
 # This is a comment
-Key = 'Value   # This is not a comment'
+Key = 'Value   # This is not a comment ; at all'
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
     }
 }
