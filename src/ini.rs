@@ -762,7 +762,6 @@ impl<'a> Parser<'a> {
             }
             self.bump();
         }
-        println!("CUR {:?}", self.ch);
         Ok(result)
     }
 
