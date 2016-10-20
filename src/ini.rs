@@ -266,7 +266,7 @@ impl Ini {
     /// Example:
     ///
     /// ```
-    ///! use ini::Ini;
+    /// use ini::Ini;
     /// let input = "[sec]\nabc = def\n";
     /// let ini = Ini::load_from_str(input).unwrap();
     /// assert_eq!(ini.get_from(Some("sec"), "abc"), Some("def"));
@@ -290,7 +290,7 @@ impl Ini {
     /// Example:
     ///
     /// ```
-    ///! use ini::Ini;
+    /// use ini::Ini;
     /// let input = "[sec]\n";
     /// let ini = Ini::load_from_str(input).unwrap();
     /// assert_eq!(ini.get_from_or(Some("sec"), "key", "default"), "default");
@@ -385,10 +385,10 @@ impl Ini {
     /// Write to a file
     pub fn write_to_file_policy(&self, filename: &str, policy: EscapePolicy) -> io::Result<()> {
         let mut file = try!(OpenOptions::new()
-                                .write(true)
-                                .truncate(true)
-                                .create(true)
-                                .open(&Path::new(filename)));
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&Path::new(filename)));
         self.write_to_policy(&mut file, policy)
     }
 
@@ -673,8 +673,8 @@ impl<'a> Parser<'a> {
                             let mval = val[..].trim().to_owned();
                             debug!("Got value: {}", mval);
                             let sec = result.sections
-                                            .entry(cursec.clone())
-                                            .or_insert(HashMap::new());
+                                .entry(cursec.clone())
+                                .or_insert(HashMap::new());
                             sec.insert(curkey, mval);
                             curkey = "".into();
                         }
@@ -756,22 +756,13 @@ impl<'a> Parser<'a> {
                         c => result.push(c),
                     }
                 }
-                Some('"') => {
-                    self.bump();
-                    let string = try!(self.parse_str_until(&[Some('"')]));
-                    result.push_str(&*string);
-                }
-                Some('\'') => {
-                    self.bump();
-                    let string = try!(self.parse_str_until(&[Some('\'')]));
-                    result.push_str(&*string);
-                }
                 Some(c) => {
                     result.push(c);
                 }
             }
             self.bump();
         }
+        println!("CUR {:?}", self.ch);
         Ok(result)
     }
 
@@ -787,7 +778,26 @@ impl<'a> Parser<'a> {
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_str_until(&[Some('\n'), Some(';'), Some('#'), None])
+        self.parse_whitespace();
+
+        match self.ch {
+            None => Ok(String::new()),
+            Some('"') => {
+                self.bump();
+                self.parse_str_until(&[Some('"')]).and_then(|s| {
+                    self.bump(); // Eats the last "
+                    Ok(s)
+                })
+            }
+            Some('\'') => {
+                self.bump();
+                self.parse_str_until(&[Some('\'')]).and_then(|s| {
+                    self.bump(); // Eats the last '
+                    Ok(s)
+                })
+            }
+            _ => self.parse_str_until(&[Some('\n'), Some(';'), Some('#'), None]),
+        }
     }
 }
 
@@ -879,7 +889,8 @@ gender : mail ; abdddd
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
-        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
+        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(),
+                   "mail");
     }
 
     #[test]
@@ -902,7 +913,8 @@ Key = \"Value
 Otherline\"
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
+                   "Value\nOtherline");
     }
 
     #[test]
@@ -914,7 +926,8 @@ Key = \"Value   # This is not a comment ; at all\"
 Stuff = Other
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
+                   "Value   # This is not a comment ; at all");
     }
 
     #[test]
@@ -930,6 +943,18 @@ Stuff = Other
     }
 
     #[test]
+    fn test_string_includes_quote() {
+        let input = "
+[Test]
+Comment[tr]=İnternet'e erişin
+Comment[uk]=Доступ до Інтернету
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Comment[tr]").unwrap(),
+                   "İnternet'e erişin");
+    }
+
+    #[test]
     fn test_string_single_multiline() {
         let input = "
 [section name]
@@ -939,7 +964,8 @@ Otherline'
 Stuff = Other
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
+                   "Value\nOtherline");
     }
 
     #[test]
@@ -950,6 +976,7 @@ Stuff = Other
 Key = 'Value   # This is not a comment ; at all'
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value   # This is not a comment ; at all");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
+                   "Value   # This is not a comment ; at all");
     }
 }

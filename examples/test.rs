@@ -18,7 +18,8 @@ fn main() {
         .set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
 
-    conf.section_mut(Some("Library")).unwrap()
+    conf.section_mut(Some("Library"))
+        .unwrap()
         .insert("seats".into(), "42".into());
 
     println!("---------------------------------------");
