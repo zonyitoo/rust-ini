@@ -639,6 +639,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Consume all the white space except line break
+    fn parse_whitespace_except_line_break(&mut self) {
+        while let Some(c) = self.ch {
+            if (c == '\n' || c == '\r' || !c.is_whitespace()) && c != '\t' {
+                break;
+            }
+            self.bump();
+        }
+    }
+
+    /// Parse the whole INI input
     pub fn parse(&mut self) -> Result<Ini, Error> {
         let mut result = Ini::new();
         let mut curkey: String = "".into();
@@ -777,7 +788,8 @@ impl<'a> Parser<'a> {
 
     fn parse_val(&mut self) -> Result<String, Error> {
         self.bump();
-        self.parse_whitespace();
+        // Issue #35: Allow empty value
+        self.parse_whitespace_except_line_break();
 
         match self.ch {
             None => Ok(String::new()),
@@ -795,7 +807,7 @@ impl<'a> Parser<'a> {
                     Ok(s)
                 })
             }
-            _ => self.parse_str_until(&[Some('\n'), Some(';'), Some('#'), None]),
+            _ => self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None]),
         }
     }
 }
@@ -977,5 +989,69 @@ Key = 'Value   # This is not a comment ; at all'
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
                    "Value   # This is not a comment ; at all");
+    }
+
+    #[test]
+    fn load_from_str_with_valid_empty_input() {
+        let input = "key1=\nkey2=val2\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let output = opt.unwrap();
+        assert_eq!(output.sections.len(), 1);
+        assert!(output.sections.contains_key(&None::<String>));
+
+        let sec1 = &output.sections[&None::<String>];
+        assert_eq!(sec1.len(), 2);
+        let key1: String = "key1".into();
+        assert!(sec1.contains_key(&key1));
+        let key2: String = "key2".into();
+        assert!(sec1.contains_key(&key2));
+        let val1: String = "".into();
+        assert_eq!(sec1[&key1], val1);
+        let val2: String = "val2".into();
+        assert_eq!(sec1[&key2], val2);
+    }
+
+    #[test]
+    fn load_from_str_with_crlf() {
+        let input = "key1=val1\r\nkey2=val2\r\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let output = opt.unwrap();
+        assert_eq!(output.sections.len(), 1);
+        assert!(output.sections.contains_key(&None::<String>));
+        let sec1 = &output.sections[&None::<String>];
+        assert_eq!(sec1.len(), 2);
+        let key1: String = "key1".into();
+        assert!(sec1.contains_key(&key1));
+        let key2: String = "key2".into();
+        assert!(sec1.contains_key(&key2));
+        let val1: String = "val1".into();
+        assert_eq!(sec1[&key1], val1);
+        let val2: String = "val2".into();
+        assert_eq!(sec1[&key2], val2);
+    }
+
+    #[test]
+    fn load_from_str_with_cr() {
+        let input = "key1=val1\rkey2=val2\r";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let output = opt.unwrap();
+        assert_eq!(output.sections.len(), 1);
+        assert!(output.sections.contains_key(&None::<String>));
+        let sec1 = &output.sections[&None::<String>];
+        assert_eq!(sec1.len(), 2);
+        let key1: String = "key1".into();
+        assert!(sec1.contains_key(&key1));
+        let key2: String = "key2".into();
+        assert!(sec1.contains_key(&key2));
+        let val1: String = "val1".into();
+        assert_eq!(sec1[&key1], val1);
+        let val2: String = "val2".into();
+        assert_eq!(sec1[&key2], val2);
     }
 }

@@ -5,6 +5,8 @@ rust:
     - beta
     - stable
 
+cache: cargo
+
 script:
-    - cargo test -v
+    - cargo test -v --no-fail-fast
     - cargo doc --no-deps
