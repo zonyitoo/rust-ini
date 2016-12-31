@@ -378,17 +378,20 @@ impl<'q> IndexMut<&'q str> for Ini {
 
 impl Ini {
     /// Write to a file
-    pub fn write_to_file(&self, filename: &str) -> io::Result<()> {
+    pub fn write_to_file<P: AsRef<Path>>(&self, filename: P) -> io::Result<()> {
         self.write_to_file_policy(filename, EscapePolicy::Basics)
     }
 
     /// Write to a file
-    pub fn write_to_file_policy(&self, filename: &str, policy: EscapePolicy) -> io::Result<()> {
+    pub fn write_to_file_policy<P: AsRef<Path>>(&self,
+                                                filename: P,
+                                                policy: EscapePolicy)
+                                                -> io::Result<()> {
         let mut file = try!(OpenOptions::new()
             .write(true)
             .truncate(true)
             .create(true)
-            .open(&Path::new(filename)));
+            .open(filename.as_ref()));
         self.write_to_policy(&mut file, policy)
     }
 
@@ -459,13 +462,13 @@ impl Ini {
     }
 
     /// Load from a file
-    pub fn load_from_file(filename: &str) -> Result<Ini, Error> {
-        let mut reader = match File::open(&Path::new(filename)) {
+    pub fn load_from_file<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
+        let mut reader = match File::open(filename.as_ref()) {
             Err(e) => {
                 return Err(Error {
                     line: 0,
                     col: 0,
-                    msg: format!("Unable to open `{}`: {}", filename, e),
+                    msg: format!("Unable to open `{:?}`: {}", filename.as_ref(), e),
                 })
             }
             Ok(r) => r,
