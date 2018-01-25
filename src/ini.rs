@@ -315,7 +315,7 @@ impl Ini {
     {
         match self.sections.get_mut(&section.map(|s| s.into())) {
             None => None,
-            Some(mut prop) => prop.get_mut(key).map(|s| &s[..]),
+            Some(prop) => prop.get_mut(key).map(|s| &s[..]),
         }
     }
 
