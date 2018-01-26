@@ -173,7 +173,7 @@ impl<'a> SectionSetter<'a> {
     /// Delete the entry in this section with `key`
     pub fn delete<K>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a>
         where String: Borrow<K>,
-              K: Hash + Eq
+              K: Hash + Eq + ?Sized
     {
         if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
             prop.remove(key);
@@ -184,7 +184,7 @@ impl<'a> SectionSetter<'a> {
     /// Get the entry in this section with `key`
     pub fn get<K>(&'a mut self, key: &K) -> Option<&'a str>
         where String: Borrow<K>,
-              K: Hash + Eq
+              K: Hash + Eq + ?Sized
     {
         self.ini
             .sections
@@ -315,7 +315,7 @@ impl Ini {
     {
         match self.sections.get_mut(&section.map(|s| s.into())) {
             None => None,
-            Some(mut prop) => prop.get_mut(key).map(|s| &s[..]),
+            Some(prop) => prop.get_mut(key).map(|s| &s[..]),
         }
     }
 
