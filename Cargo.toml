@@ -1,6 +1,6 @@
 [package]
 name = "rust-ini"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Y. T. Chung <zonyitoo@gmail.com>"]
 description = "An Ini configuration file parsing library in Rust"
 repository = "https://github.com/zonyitoo/rust-ini"
@@ -13,4 +13,4 @@ name = "ini"
 test = true
 
 [dependencies]
-log = "^0.3.5"
+log = "^0"

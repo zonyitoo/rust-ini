@@ -1057,4 +1057,15 @@ Key = 'Value   # This is not a comment ; at all'
         let val2: String = "val2".into();
         assert_eq!(sec1[&key2], val2);
     }
+
+    #[test]
+    fn get_with_non_static_key() {
+        let input = "key1=val1\nkey2=val2\n";
+        let opt = Ini::load_from_str(input).unwrap();
+
+        let sec1 = &opt.sections[&None::<String>];
+
+        let key = "key1".to_owned();
+        sec1.get(&key).unwrap();
+    }
 }
