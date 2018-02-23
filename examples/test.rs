@@ -7,19 +7,14 @@ use ini::Ini;
 const CONF_FILE_NAME: &'static str = "test.ini";
 
 fn main() {
-
     let mut conf = Ini::new();
-    conf.with_section(None::<String>)
-        .set("encoding", "utf-8");
-    conf.with_section(Some("User"))
-        .set("name", "Raspberry树莓")
+    conf.with_section(None::<String>).set("encoding", "utf-8");
+    conf.with_section(Some("User")).set("name", "Raspberry树莓")
         .set("value", "Pi");
-    conf.with_section(Some("Library"))
-        .set("name", "Sun Yat-sen U")
+    conf.with_section(Some("Library")).set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
 
-    conf.section_mut(Some("Library"))
-        .unwrap()
+    conf.section_mut(Some("Library")).unwrap()
         .insert("seats".into(), "42".into());
 
     println!("---------------------------------------");
