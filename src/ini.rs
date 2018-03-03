@@ -895,9 +895,9 @@ gender = mail ; abdddd
 ";
         let mut ini = Ini::load_from_str(input).unwrap();
 
-        for (..,) in &mut ini {}
-        for (..,) in &ini {}
-        for (..,) in ini {}
+        for _ in &mut ini {}
+        for _ in &ini {}
+        for _ in ini {}
     }
 
     #[test]
