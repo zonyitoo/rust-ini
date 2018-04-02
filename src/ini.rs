@@ -25,8 +25,8 @@ use std::borrow::Borrow;
 use std::char;
 use std::cmp::Eq;
 use std::collections::HashMap;
-use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys};
 use std::collections::hash_map::Entry;
+use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys};
 use std::error;
 use std::fmt::{self, Display};
 use std::fs::{File, OpenOptions};
@@ -444,10 +444,9 @@ impl Ini {
     /// Load from a reader
     pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini, Error> {
         let mut s = String::new();
-        reader.read_to_string(&mut s)
-              .map_err(|err| Error { line: 0,
-                                     col: 0,
-                                     msg: format!("{}", err), })?;
+        reader.read_to_string(&mut s).map_err(|err| Error { line: 0,
+                                                             col: 0,
+                                                             msg: format!("{}", err), })?;
         let mut parser = Parser::new(s.chars(), false);
         parser.parse()
     }
@@ -455,10 +454,9 @@ impl Ini {
     /// Load from a reader, but do not interpret '\' as an escape character
     pub fn read_from_noescape<R: Read>(reader: &mut R) -> Result<Ini, Error> {
         let mut s = String::new();
-        reader.read_to_string(&mut s)
-              .map_err(|err| Error { line: 0,
-                                     col: 0,
-                                     msg: format!("{}", err), })?;
+        reader.read_to_string(&mut s).map_err(|err| Error { line: 0,
+                                                             col: 0,
+                                                             msg: format!("{}", err), })?;
         let mut parser = Parser::new(s.chars(), true);
         parser.parse()
     }
@@ -680,9 +678,7 @@ impl<'a> Parser<'a> {
                         Ok(sec) => {
                             let msec = &sec[..].trim();
                             cursec = Some(msec.to_string());
-                            result.sections
-                                  .entry(cursec.clone())
-                                  .or_insert(HashMap::new());
+                            result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             self.bump();
                         }
                         Err(e) => return Err(e),
@@ -695,9 +691,7 @@ impl<'a> Parser<'a> {
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
-                            let sec = result.sections
-                                            .entry(cursec.clone())
-                                            .or_insert(HashMap::new());
+                            let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
                             sec.insert(curkey, mval);
                             curkey = "".into();
                         }
@@ -915,8 +909,7 @@ gender : mail ; abdddd
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
-        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(),
-                   "mail");
+        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
     }
 
     #[test]
@@ -939,8 +932,7 @@ Key = \"Value
 Otherline\"
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
-                   "Value\nOtherline");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
     }
 
     #[test]
@@ -990,8 +982,7 @@ Otherline'
 Stuff = Other
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
-                   "Value\nOtherline");
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value\nOtherline");
     }
 
     #[test]
