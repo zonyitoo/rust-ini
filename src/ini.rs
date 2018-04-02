@@ -807,18 +807,24 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.parse_str_until(&[Some('"')]).and_then(|s| {
                                                                 self.bump(); // Eats the last "
-                                                                Ok(s)
+                                                                             // Parse until EOL
+                                                                self.parse_str_until_eol().map(|x| s + &x)
                                                             })
             }
             Some('\'') => {
                 self.bump();
                 self.parse_str_until(&[Some('\'')]).and_then(|s| {
                                                                  self.bump(); // Eats the last '
-                                                                 Ok(s)
+                                                                              // Parse until EOL
+                                                                 self.parse_str_until_eol().map(|x| s + &x)
                                                              })
             }
-            _ => self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None]),
+            _ => self.parse_str_until_eol(),
         }
+    }
+
+    fn parse_str_until_eol(&mut self) -> Result<String, Error> {
+        self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
     }
 }
 
@@ -1087,5 +1093,31 @@ Key = 'Value   # This is not a comment ; at all'
         assert_eq!(sec.len(), 1);
         assert!(sec.contains_key("path"));
         assert_eq!(sec["path"], "C:\\Windows\\Some\\Folder\\");
+    }
+
+    #[test]
+    fn partial_quoting_double() {
+        let input = "
+[Section]
+A=\"quote\" arg0
+B=b";
+
+        let opt = Ini::load_from_str(input).unwrap();
+        let sec = opt.section(Some("Section")).unwrap();
+        assert_eq!(sec["A"], "quote arg0");
+        assert_eq!(sec["B"], "b");
+    }
+
+    #[test]
+    fn partial_quoting_single() {
+        let input = "
+[Section]
+A='quote' arg0
+B=b";
+
+        let opt = Ini::load_from_str(input).unwrap();
+        let sec = opt.section(Some("Section")).unwrap();
+        assert_eq!(sec["A"], "quote arg0");
+        assert_eq!(sec["B"], "b");
     }
 }
