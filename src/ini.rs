@@ -139,6 +139,39 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
     escaped
 }
 
+/// Parsing configuration
+pub struct ParseOption {
+    /// Allow quote (" or ') in value
+    /// For example
+    /// ```ini
+    /// [Section]
+    /// Key1="Quoted value"
+    /// Key2='Single Quote' with extra value
+    /// ```
+    ///
+    /// In this example, Value of `Key1` is `Quoted value`,
+    /// and value of `Key2` is `Single Quote with extra value`
+    /// if `enabled_quote` is set to `true`.
+    pub enabled_quote: bool,
+
+    /// Interpret `\` as an escape character
+    /// For example
+    /// ```ini
+    /// [Section]
+    /// Key1=C:\Windows
+    /// ```
+    ///
+    /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
+    pub enabled_escape: bool,
+}
+
+impl Default for ParseOption {
+    fn default() -> ParseOption {
+        ParseOption { enabled_quote: true,
+                      enabled_escape: true, }
+    }
+}
+
 /// A setter which could be used to set key-value pair in a specified section
 pub struct SectionSetter<'a> {
     ini: &'a mut Ini,
@@ -271,12 +304,10 @@ impl Ini {
     {
         match self.sections.get(&section.map(|s| s.into())) {
             None => None,
-            Some(ref prop) => {
-                match prop.get(key) {
-                    Some(p) => Some(&p[..]),
-                    None => None,
-                }
-            }
+            Some(ref prop) => match prop.get(key) {
+                Some(p) => Some(&p[..]),
+                None => None,
+            },
         }
     }
 
@@ -295,12 +326,10 @@ impl Ini {
     {
         match self.sections.get(&section.map(|s| s.into())) {
             None => default,
-            Some(ref prop) => {
-                match prop.get(key) {
-                    Some(p) => &p[..],
-                    None => default,
-                }
-            }
+            Some(ref prop) => match prop.get(key) {
+                Some(p) => &p[..],
+                None => default,
+            },
         }
     }
 
@@ -431,51 +460,58 @@ impl Ini {
 impl Ini {
     /// Load from a string
     pub fn load_from_str(buf: &str) -> Result<Ini, Error> {
-        let mut parser = Parser::new(buf.chars(), false);
-        parser.parse()
+        Ini::load_from_str_opt(buf, ParseOption::default())
     }
 
     /// Load from a string, but do not interpret '\' as an escape character
     pub fn load_from_str_noescape(buf: &str) -> Result<Ini, Error> {
-        let mut parser = Parser::new(buf.chars(), true);
+        Ini::load_from_str_opt(buf,
+                               ParseOption { enabled_escape: false,
+                                             ..ParseOption::default() })
+    }
+
+    /// Load from a string with options
+    pub fn load_from_str_opt(buf: &str, opt: ParseOption) -> Result<Ini, Error> {
+        let mut parser = Parser::new(buf.chars(), opt);
         parser.parse()
     }
 
     /// Load from a reader
     pub fn read_from<R: Read>(reader: &mut R) -> Result<Ini, Error> {
-        let mut s = String::new();
-        reader.read_to_string(&mut s).map_err(|err| Error { line: 0,
-                                                             col: 0,
-                                                             msg: format!("{}", err), })?;
-        let mut parser = Parser::new(s.chars(), false);
-        parser.parse()
+        Ini::read_from_opt(reader, ParseOption::default())
     }
 
     /// Load from a reader, but do not interpret '\' as an escape character
     pub fn read_from_noescape<R: Read>(reader: &mut R) -> Result<Ini, Error> {
+        Ini::read_from_opt(reader,
+                           ParseOption { enabled_escape: false,
+                                         ..ParseOption::default() })
+    }
+
+    /// Load from a reader with options
+    pub fn read_from_opt<R: Read>(reader: &mut R, opt: ParseOption) -> Result<Ini, Error> {
         let mut s = String::new();
         reader.read_to_string(&mut s).map_err(|err| Error { line: 0,
                                                              col: 0,
                                                              msg: format!("{}", err), })?;
-        let mut parser = Parser::new(s.chars(), true);
+        let mut parser = Parser::new(s.chars(), opt);
         parser.parse()
     }
 
     /// Load from a file
     pub fn load_from_file<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
-        let mut reader = match File::open(filename.as_ref()) {
-            Err(e) => {
-                return Err(Error { line: 0,
-                                   col: 0,
-                                   msg: format!("Unable to open `{:?}`: {}", filename.as_ref(), e), })
-            }
-            Ok(r) => r,
-        };
-        Ini::read_from(&mut reader)
+        Ini::load_from_file_opt(filename, ParseOption::default())
     }
 
     /// Load from a file, but do not interpret '\' as an escape character
     pub fn load_from_file_noescape<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
+        Ini::load_from_file_opt(filename,
+                                ParseOption { enabled_escape: false,
+                                              ..ParseOption::default() })
+    }
+
+    /// Load from a file with options
+    pub fn load_from_file_opt<P: AsRef<Path>>(filename: P, opt: ParseOption) -> Result<Ini, Error> {
         let mut reader = match File::open(filename.as_ref()) {
             Err(e) => {
                 return Err(Error { line: 0,
@@ -484,7 +520,7 @@ impl Ini {
             }
             Ok(r) => r,
         };
-        Ini::read_from_noescape(&mut reader)
+        Ini::read_from_opt(&mut reader, opt)
     }
 }
 
@@ -578,7 +614,7 @@ struct Parser<'a> {
     rdr: Chars<'a>,
     line: usize,
     col: usize,
-    literal: bool,
+    opt: ParseOption,
 }
 
 #[derive(Debug)]
@@ -607,12 +643,12 @@ impl error::Error for Error {
 
 impl<'a> Parser<'a> {
     // Create a parser
-    pub fn new(rdr: Chars<'a>, literal: bool) -> Parser<'a> {
+    pub fn new(rdr: Chars<'a>, opt: ParseOption) -> Parser<'a> {
         let mut p = Parser { ch: None,
                              line: 0,
                              col: 0,
                              rdr: rdr,
-                             literal: literal, };
+                             opt: opt, };
         p.bump();
         p
     }
@@ -673,17 +709,15 @@ impl<'a> Parser<'a> {
                 ';' | '#' => {
                     self.parse_comment();
                 }
-                '[' => {
-                    match self.parse_section() {
-                        Ok(sec) => {
-                            let msec = &sec[..].trim();
-                            cursec = Some(msec.to_string());
-                            result.sections.entry(cursec.clone()).or_insert(HashMap::new());
-                            self.bump();
-                        }
-                        Err(e) => return Err(e),
+                '[' => match self.parse_section() {
+                    Ok(sec) => {
+                        let msec = &sec[..].trim();
+                        cursec = Some(msec.to_string());
+                        result.sections.entry(cursec.clone()).or_insert(HashMap::new());
+                        self.bump();
                     }
-                }
+                    Err(e) => return Err(e),
+                },
                 '=' | ':' => {
                     if (&curkey[..]).is_empty() {
                         return self.error("Missing key".to_string());
@@ -698,15 +732,13 @@ impl<'a> Parser<'a> {
                         Err(e) => return Err(e),
                     }
                 }
-                _ => {
-                    match self.parse_key() {
-                        Ok(key) => {
-                            let mkey: String = key[..].trim().to_owned();
-                            curkey = mkey.into();
-                        }
-                        Err(e) => return Err(e),
+                _ => match self.parse_key() {
+                    Ok(key) => {
+                        let mkey: String = key[..].trim().to_owned();
+                        curkey = mkey.into();
                     }
-                }
+                    Err(e) => return Err(e),
+                },
             }
 
             self.parse_whitespace();
@@ -732,7 +764,7 @@ impl<'a> Parser<'a> {
                 None => {
                     return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
                 }
-                Some('\\') if !self.literal => {
+                Some('\\') if self.opt.enabled_escape => {
                     self.bump();
                     if self.eof() {
                         return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
@@ -797,7 +829,7 @@ impl<'a> Parser<'a> {
 
         match self.ch {
             None => Ok(String::new()),
-            Some('"') => {
+            Some('"') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('"')]).and_then(|s| {
                                                                 self.bump(); // Eats the last "
@@ -805,7 +837,7 @@ impl<'a> Parser<'a> {
                                                                 self.parse_str_until_eol().map(|x| s + &x)
                                                             })
             }
-            Some('\'') => {
+            Some('\'') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('\'')]).and_then(|s| {
                                                                  self.bump(); // Eats the last '
@@ -1110,5 +1142,17 @@ B=b";
         let sec = opt.section(Some("Section")).unwrap();
         assert_eq!(sec["A"], "quote arg0");
         assert_eq!(sec["B"], "b");
+    }
+
+    #[test]
+    fn parse_without_quote() {
+        let input = "
+[Desktop Entry]
+Exec = \"/path/to/exe with space\" arg
+";
+
+        let opt = Ini::load_from_str_opt(input, ParseOption { enabled_quote: false, ..ParseOption::default()}).unwrap();
+        let sec = opt.section(Some("Desktop Entry")).unwrap();
+        assert_eq!(sec["Exec"], "\"/path/to/exe with space\" arg");
     }
 }
