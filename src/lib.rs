@@ -40,5 +40,5 @@
 //! }
 //! ```
 
-pub use ini::Ini;
+pub use ini::{Ini, ParseOption};
 pub mod ini;
