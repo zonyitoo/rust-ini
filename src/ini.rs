@@ -459,19 +459,19 @@ impl Ini {
 
 impl Ini {
     /// Load from a string
-    pub fn load_from_str(buf: &str) -> Result<Ini, Error> {
+    pub fn load_from_str(buf: &str) -> Result<Ini, ParseError> {
         Ini::load_from_str_opt(buf, ParseOption::default())
     }
 
     /// Load from a string, but do not interpret '\' as an escape character
-    pub fn load_from_str_noescape(buf: &str) -> Result<Ini, Error> {
+    pub fn load_from_str_noescape(buf: &str) -> Result<Ini, ParseError> {
         Ini::load_from_str_opt(buf,
                                ParseOption { enabled_escape: false,
                                              ..ParseOption::default() })
     }
 
     /// Load from a string with options
-    pub fn load_from_str_opt(buf: &str, opt: ParseOption) -> Result<Ini, Error> {
+    pub fn load_from_str_opt(buf: &str, opt: ParseOption) -> Result<Ini, ParseError> {
         let mut parser = Parser::new(buf.chars(), opt);
         parser.parse()
     }
@@ -491,11 +491,12 @@ impl Ini {
     /// Load from a reader with options
     pub fn read_from_opt<R: Read>(reader: &mut R, opt: ParseOption) -> Result<Ini, Error> {
         let mut s = String::new();
-        reader.read_to_string(&mut s).map_err(|err| Error { line: 0,
-                                                             col: 0,
-                                                             msg: format!("{}", err), })?;
+        reader.read_to_string(&mut s).map_err(|err| Error::Io(err))?;
         let mut parser = Parser::new(s.chars(), opt);
-        parser.parse()
+        match parser.parse() {
+            Err(e) => Err(Error::Parse(e)),
+            Ok(success) => Ok(success),
+        }
     }
 
     /// Load from a file
@@ -514,9 +515,7 @@ impl Ini {
     pub fn load_from_file_opt<P: AsRef<Path>>(filename: P, opt: ParseOption) -> Result<Ini, Error> {
         let mut reader = match File::open(filename.as_ref()) {
             Err(e) => {
-                return Err(Error { line: 0,
-                                   col: 0,
-                                   msg: format!("Unable to open `{:?}`: {}", filename.as_ref(), e), })
+                return Err(Error::Io(e));
             }
             Ok(r) => r,
         };
@@ -619,25 +618,56 @@ struct Parser<'a> {
 
 #[derive(Debug)]
 /// Parse error
-pub struct Error {
+pub struct ParseError {
     pub line: usize,
     pub col: usize,
     pub msg: String,
 }
 
-impl Display for Error {
+impl Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{} {}", self.line, self.col, self.msg)
     }
 }
 
-impl error::Error for Error {
+impl error::Error for ParseError {
     fn description(&self) -> &str {
         self.msg.as_str()
     }
 
     fn cause(&self) -> Option<&error::Error> {
         None
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+ Io(io::Error),
+ Parse(ParseError),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            &Error::Io(err) => err.fmt(f),
+            &Error::Parse(err) => err.fmt(f),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match &self {
+            &Error::Io(err) => err.description(),
+            &Error::Parse(err) => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match &self {
+            &Error::Io(err) => err.cause(),
+            &Error::Parse(err) => err.cause(),
+        }
     }
 }
 
@@ -671,10 +701,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn error<U>(&self, msg: String) -> Result<U, Error> {
-        Err(Error { line: self.line,
-                    col: self.col,
-                    msg: msg.clone(), })
+    fn error<U>(&self, msg: String) -> Result<U, ParseError> {
+        Err(ParseError { line: self.line,
+                         col: self.col,
+                         msg: msg.clone(), })
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -698,7 +728,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the whole INI input
-    pub fn parse(&mut self) -> Result<Ini, Error> {
+    pub fn parse(&mut self) -> Result<Ini, ParseError> {
         let mut result = Ini::new();
         let mut curkey: String = "".into();
         let mut cursec: Option<String> = None;
@@ -756,7 +786,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, Error> {
+    fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, ParseError> {
         let mut result: String = String::new();
 
         while !endpoint.contains(&self.ch) {
@@ -812,17 +842,17 @@ impl<'a> Parser<'a> {
         Ok(result)
     }
 
-    fn parse_section(&mut self) -> Result<String, Error> {
+    fn parse_section(&mut self) -> Result<String, ParseError> {
         // Skip [
         self.bump();
         self.parse_str_until(&[Some(']')])
     }
 
-    fn parse_key(&mut self) -> Result<String, Error> {
+    fn parse_key(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('='), Some(':')])
     }
 
-    fn parse_val(&mut self) -> Result<String, Error> {
+    fn parse_val(&mut self) -> Result<String, ParseError> {
         self.bump();
         // Issue #35: Allow empty value
         self.parse_whitespace_except_line_break();
@@ -849,7 +879,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_str_until_eol(&mut self) -> Result<String, Error> {
+    fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
     }
 }
