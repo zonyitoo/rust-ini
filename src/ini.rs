@@ -648,25 +648,25 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self {
-            &Error::Io(err) => err.fmt(f),
-            &Error::Parse(err) => err.fmt(f),
+        match self {
+            &Error::Io(ref err) => err.fmt(f),
+            &Error::Parse(ref err) => err.fmt(f),
         }
     }
 }
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        match &self {
-            &Error::Io(err) => err.description(),
-            &Error::Parse(err) => err.description(),
+        match self {
+            &Error::Io(ref err) => err.description(),
+            &Error::Parse(ref err) => err.description(),
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        match &self {
-            &Error::Io(err) => err.cause(),
-            &Error::Parse(err) => err.cause(),
+        match self {
+            &Error::Io(ref err) => err.cause(),
+            &Error::Parse(ref err) => err.cause(),
         }
     }
 }

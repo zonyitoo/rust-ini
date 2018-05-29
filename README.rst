@@ -20,6 +20,9 @@ This is an INI file parser in Rust_.
     [dependencies]
     rust-ini = "0.12"
 
+This crate currently supports Rust 1.15+. Changes in the minimally required Rust
+version will be treated as an incompatible change.
+
 Usage
 =====
 

@@ -4,6 +4,7 @@ rust:
     - nightly
     - beta
     - stable
+    - 1.15.0
 
 cache: cargo
 
