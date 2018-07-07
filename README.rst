@@ -90,7 +90,9 @@ Then you will get ``conf.ini``
 License
 =======
 
-The MIT License (MIT)
+`The MIT License (MIT)`_
+
+.. _The MIT License (MIT): https://opensource.org/licenses/MIT
 
 Copyright (c) 2014 Y. T. CHUNG
 
