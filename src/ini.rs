@@ -36,6 +36,11 @@ use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::Chars;
 
+#[cfg(windows)]
+const NEWLINE: &'static str = "\r\n";
+#[cfg(not(windows))]
+const NEWLINE: &'static str = "\n";
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EscapePolicy {
     /// escape absolutely nothing (dangerous)
@@ -429,7 +434,7 @@ impl Ini {
                 for (k, v) in props.iter() {
                     let k_str = escape_str(&k[..], policy);
                     let v_str = escape_str(&v[..], policy);
-                    write!(writer, "{}={}\n", k_str, v_str)?;
+                    write!(writer, "{}={}{}", k_str, v_str,NEWLINE)?;
                 }
                 firstline = false;
             }
@@ -440,16 +445,16 @@ impl Ini {
             if firstline {
                 firstline = false;
             } else {
-                writer.write_all(b"\n")?;
+                writer.write_all(NEWLINE.as_bytes())?;
             }
 
             if let &Some(ref section) = section {
-                write!(writer, "[{}]\n", escape_str(&section[..], policy))?;
+                write!(writer, "[{}]{}", escape_str(&section[..], policy),NEWLINE)?;
 
                 for (k, v) in props.iter() {
                     let k_str = escape_str(&k[..], policy);
                     let v_str = escape_str(&v[..], policy);
-                    write!(writer, "{}={}\n", k_str, v_str)?;
+                    write!(writer, "{}={}{}", k_str, v_str,NEWLINE)?;
                 }
             }
         }
