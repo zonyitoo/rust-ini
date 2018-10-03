@@ -180,8 +180,7 @@ pub struct SectionSetter<'a> {
 
 impl<'a> SectionSetter<'a> {
     fn new(ini: &'a mut Ini, section_name: Option<String>) -> SectionSetter<'a> {
-        SectionSetter { ini: ini,
-                        section_name: section_name, }
+        SectionSetter { ini, section_name, }
     }
 
     /// Set key-value pair in this section
@@ -225,7 +224,7 @@ impl<'a> SectionSetter<'a> {
 pub type Properties = HashMap<String, String>; // Key-value pairs
 
 /// Ini struct
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Ini {
     sections: HashMap<Option<String>, Properties>,
 }
@@ -233,11 +232,11 @@ pub struct Ini {
 impl Ini {
     /// Create an instance
     pub fn new() -> Ini {
-        Ini { sections: HashMap::new(), }
+        Default::default()
     }
 
     /// Set with a specified section, `None` is for the general section
-    pub fn with_section<'b, S>(&'b mut self, section: Option<S>) -> SectionSetter<'b>
+    pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter
         where S: Into<String>
     {
         SectionSetter::new(self, section.map(|s| s.into()))
@@ -254,31 +253,31 @@ impl Ini {
     }
 
     /// Get a immutable section
-    pub fn section<'a, S>(&'a self, name: Option<S>) -> Option<&'a Properties>
+    pub fn section<S>(&self, name: Option<S>) -> Option<&Properties>
         where S: Into<String>
     {
         self.sections.get(&name.map(|s| s.into()))
     }
 
     /// Get a mutable section
-    pub fn section_mut<'a, S>(&'a mut self, name: Option<S>) -> Option<&'a mut Properties>
+    pub fn section_mut<S>(&mut self, name: Option<S>) -> Option<&mut Properties>
         where S: Into<String>
     {
         self.sections.get_mut(&name.map(|s| s.into()))
     }
 
     /// Get the entry
-    pub fn entry<'a>(&'a mut self, name: Option<String>) -> Entry<Option<String>, Properties> {
-        self.sections.entry(name.map(|s| s.into()))
+    pub fn entry(&mut self, name: Option<String>) -> Entry<Option<String>, Properties> {
+        self.sections.entry(name.map(|s| s))
     }
 
     /// Clear all entries
-    pub fn clear<'a>(&mut self) {
+    pub fn clear(&mut self) {
         self.sections.clear()
     }
 
     /// Iterate with sections
-    pub fn sections<'a>(&'a self) -> Keys<'a, Option<String>, Properties> {
+    pub fn sections(&self) -> Keys<Option<String>, Properties> {
         self.sections.keys()
     }
 
@@ -353,10 +352,7 @@ impl Ini {
     pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
         where S: Into<String>
     {
-        match self.section_mut(section) {
-            None => return None,
-            Some(prop) => prop.remove(key),
-        }
+        self.section_mut(section).and_then(|prop| prop.remove(key))
     }
 }
 
@@ -424,16 +420,13 @@ impl Ini {
     pub fn write_to_policy<W: Write>(&self, writer: &mut W, policy: EscapePolicy) -> io::Result<()> {
         let mut firstline = true;
 
-        match self.sections.get(&None) {
-            Some(props) => {
-                for (k, v) in props.iter() {
-                    let k_str = escape_str(&k[..], policy);
-                    let v_str = escape_str(&v[..], policy);
-                    write!(writer, "{}={}\n", k_str, v_str)?;
-                }
-                firstline = false;
+        if let Some(props) = self.sections.get(&None) {
+            for (k, v) in props.iter() {
+                let k_str = escape_str(&k[..], policy);
+                let v_str = escape_str(&v[..], policy);
+                writeln!(writer, "{}={}", k_str, v_str)?;
             }
-            None => {}
+            firstline = false;
         }
 
         for (section, props) in self.sections.iter().filter(|&(ref s, _)| s.is_some()) {
@@ -443,13 +436,13 @@ impl Ini {
                 writer.write_all(b"\n")?;
             }
 
-            if let &Some(ref section) = section {
-                write!(writer, "[{}]\n", escape_str(&section[..], policy))?;
+            if let Some(ref section) = *section {
+                writeln!(writer, "[{}]", escape_str(&section[..], policy))?;
 
                 for (k, v) in props.iter() {
                     let k_str = escape_str(&k[..], policy);
                     let v_str = escape_str(&v[..], policy);
-                    write!(writer, "{}={}\n", k_str, v_str)?;
+                    writeln!(writer, "{}={}", k_str, v_str)?;
                 }
             }
         }
@@ -491,7 +484,7 @@ impl Ini {
     /// Load from a reader with options
     pub fn read_from_opt<R: Read>(reader: &mut R, opt: ParseOption) -> Result<Ini, Error> {
         let mut s = String::new();
-        reader.read_to_string(&mut s).map_err(|err| Error::Io(err))?;
+        reader.read_to_string(&mut s).map_err(Error::Io)?;
         let mut parser = Parser::new(s.chars(), opt);
         match parser.parse() {
             Err(e) => Err(Error::Parse(e)),
@@ -648,25 +641,25 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Error::Io(ref err) => err.fmt(f),
-            &Error::Parse(ref err) => err.fmt(f),
+        match *self {
+            Error::Io(ref err) => err.fmt(f),
+            Error::Parse(ref err) => err.fmt(f),
         }
     }
 }
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        match self {
-            &Error::Io(ref err) => err.description(),
-            &Error::Parse(ref err) => err.description(),
+        match *self {
+            Error::Io(ref err) => err.description(),
+            Error::Parse(ref err) => err.description(),
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        match self {
-            &Error::Io(ref err) => err.cause(),
-            &Error::Parse(ref err) => err.cause(),
+        match *self {
+            Error::Io(ref err) => err.cause(),
+            Error::Parse(ref err) => err.cause(),
         }
     }
 }
@@ -677,8 +670,8 @@ impl<'a> Parser<'a> {
         let mut p = Parser { ch: None,
                              line: 0,
                              col: 0,
-                             rdr: rdr,
-                             opt: opt, };
+                             rdr,
+                             opt, };
         p.bump();
         p
     }
@@ -704,7 +697,7 @@ impl<'a> Parser<'a> {
     fn error<U>(&self, msg: String) -> Result<U, ParseError> {
         Err(ParseError { line: self.line,
                          col: self.col,
-                         msg: msg.clone(), })
+                         msg, })
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -743,7 +736,7 @@ impl<'a> Parser<'a> {
                     Ok(sec) => {
                         let msec = &sec[..].trim();
                         cursec = Some(msec.to_string());
-                        result.sections.entry(cursec.clone()).or_insert(HashMap::new());
+                        result.sections.entry(cursec.clone()).or_insert_with(HashMap::new);
                         self.bump();
                     }
                     Err(e) => return Err(e),
@@ -755,7 +748,7 @@ impl<'a> Parser<'a> {
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
-                            let sec = result.sections.entry(cursec.clone()).or_insert(HashMap::new());
+                            let sec = result.sections.entry(cursec.clone()).or_insert_with(HashMap::new);
                             sec.insert(curkey, mval);
                             curkey = "".into();
                         }
@@ -765,7 +758,7 @@ impl<'a> Parser<'a> {
                 _ => match self.parse_key() {
                     Ok(key) => {
                         let mkey: String = key[..].trim().to_owned();
-                        curkey = mkey.into();
+                        curkey = mkey;
                     }
                     Err(e) => return Err(e),
                 },
