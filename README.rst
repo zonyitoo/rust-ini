@@ -7,6 +7,9 @@ INI in Rust
 .. image:: https://img.shields.io/crates/v/rust-ini.svg
     :target: https://crates.io/crates/rust-ini
 
+.. image:: https://docs.rs/rust-ini/badge.svg
+    :target: https://docs.rs/rust-ini
+
 INI_ is an informal standard for configuration files for some platforms or software. INI files are simple text files with a basic structure composed of "sections" and "properties".
 
 .. _INI: http://en.wikipedia.org/wiki/INI_file
