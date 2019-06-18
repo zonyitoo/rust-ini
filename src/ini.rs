@@ -24,10 +24,11 @@
 use std::borrow::Borrow;
 use std::char;
 use std::cmp::Eq;
-use std::collections::HashMap;
+use std::error;
+
 use std::collections::hash_map::Entry;
 use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys};
-use std::error;
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::fs::{File, OpenOptions};
 use std::hash::Hash;
@@ -35,6 +36,8 @@ use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::Chars;
+
+use multimap::MultiMap;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EscapePolicy {
@@ -53,15 +56,15 @@ pub enum EscapePolicy {
 }
 
 impl EscapePolicy {
-    fn escape_basics(&self) -> bool {
-        match *self {
+    fn escape_basics(self) -> bool {
+        match self {
             EscapePolicy::Nothing => false,
             _ => true,
         }
     }
 
-    fn escape_reserved(&self) -> bool {
-        match *self {
+    fn escape_reserved(self) -> bool {
+        match self {
             EscapePolicy::Reserved => true,
             EscapePolicy::ReservedUnicode => true,
             EscapePolicy::Everything => true,
@@ -69,8 +72,8 @@ impl EscapePolicy {
         }
     }
 
-    fn escape_unicode(&self) -> bool {
-        match *self {
+    fn escape_unicode(self) -> bool {
+        match self {
             EscapePolicy::BasicsUnicode => true,
             EscapePolicy::ReservedUnicode => true,
             EscapePolicy::Everything => true,
@@ -80,7 +83,7 @@ impl EscapePolicy {
 
     /// Given a character this returns true if it should be escaped as
     /// per this policy or false if not.
-    pub fn should_escape(&self, c: char) -> bool {
+    pub fn should_escape(self, c: char) -> bool {
         match c {
             '\\' | '\x00'...'\x1f' | '\x7f'...'\u{00ff}' => self.escape_basics(),
             ';' | '#' | '=' | ':' => self.escape_reserved(),
@@ -168,7 +171,7 @@ pub struct ParseOption {
 impl Default for ParseOption {
     fn default() -> ParseOption {
         ParseOption { enabled_quote: true,
-                      enabled_escape: true, }
+                      enabled_escape: true }
     }
 }
 
@@ -180,7 +183,7 @@ pub struct SectionSetter<'a> {
 
 impl<'a> SectionSetter<'a> {
     fn new(ini: &'a mut Ini, section_name: Option<String>) -> SectionSetter<'a> {
-        SectionSetter { ini, section_name, }
+        SectionSetter { ini, section_name }
     }
 
     /// Set key-value pair in this section
@@ -190,7 +193,7 @@ impl<'a> SectionSetter<'a> {
     {
         {
             let prop = match self.ini.sections.entry(self.section_name.clone()) {
-                Entry::Vacant(entry) => entry.insert(HashMap::new()),
+                Entry::Vacant(entry) => entry.insert(MultiMap::new()),
                 Entry::Occupied(entry) => entry.into_mut(),
             };
             prop.insert(key.into(), value.into());
@@ -214,14 +217,15 @@ impl<'a> SectionSetter<'a> {
         where String: Borrow<K>,
               K: Hash + Eq + ?Sized
     {
-        self.ini.sections
+        self.ini
+            .sections
             .get(&self.section_name)
             .and_then(|prop| prop.get(key).map(|s| &s[..]))
     }
 }
 
 /// Properties type (key-value pairs)
-pub type Properties = HashMap<String, String>; // Key-value pairs
+pub type Properties = MultiMap<String, String>; // Key-value pairs
 
 /// Ini struct
 #[derive(Clone, Default)]
@@ -239,31 +243,33 @@ impl Ini {
     pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter
         where S: Into<String>
     {
-        SectionSetter::new(self, section.map(|s| s.into()))
+        SectionSetter::new(self, section.map(Into::into))
     }
 
     /// Get the immmutable general section
     pub fn general_section(&self) -> &Properties {
-        self.section(None::<String>).expect("There is no general section in this Ini")
+        self.section(None::<String>)
+            .expect("There is no general section in this Ini")
     }
 
     /// Get the mutable general section
     pub fn general_section_mut(&mut self) -> &mut Properties {
-        self.section_mut(None::<String>).expect("There is no general section in this Ini")
+        self.section_mut(None::<String>)
+            .expect("There is no general section in this Ini")
     }
 
     /// Get a immutable section
     pub fn section<S>(&self, name: Option<S>) -> Option<&Properties>
         where S: Into<String>
     {
-        self.sections.get(&name.map(|s| s.into()))
+        self.sections.get(&name.map(Into::into))
     }
 
     /// Get a mutable section
     pub fn section_mut<S>(&mut self, name: Option<S>) -> Option<&mut Properties>
         where S: Into<String>
     {
-        self.sections.get_mut(&name.map(|s| s.into()))
+        self.sections.get_mut(&name.map(Into::into))
     }
 
     /// Get the entry
@@ -301,7 +307,7 @@ impl Ini {
     pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
         where S: Into<String>
     {
-        match self.sections.get(&section.map(|s| s.into())) {
+        match self.sections.get(&section.map(Into::into)) {
             None => None,
             Some(ref prop) => match prop.get(key) {
                 Some(p) => Some(&p[..]),
@@ -323,7 +329,7 @@ impl Ini {
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
         where S: Into<String>
     {
-        match self.sections.get(&section.map(|s| s.into())) {
+        match self.sections.get(&section.map(Into::into)) {
             None => default,
             Some(ref prop) => match prop.get(key) {
                 Some(p) => &p[..],
@@ -336,7 +342,7 @@ impl Ini {
     pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a str>
         where S: Into<String>
     {
-        match self.sections.get_mut(&section.map(|s| s.into())) {
+        match self.sections.get_mut(&section.map(Into::into)) {
             None => None,
             Some(prop) => prop.get_mut(key).map(|s| &s[..]),
         }
@@ -346,10 +352,10 @@ impl Ini {
     pub fn delete<S>(&mut self, section: Option<S>) -> Option<Properties>
         where S: Into<String>
     {
-        self.sections.remove(&section.map(|s| s.into()))
+        self.sections.remove(&section.map(Into::into))
     }
 
-    pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
+    pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<Vec<String>>
         where S: Into<String>
     {
         self.section_mut(section).and_then(|prop| prop.remove(key))
@@ -529,18 +535,18 @@ pub struct SectionMutIterator<'a> {
 impl<'a> Ini {
     /// Immutable iterate though sections
     pub fn iter(&'a self) -> SectionIterator<'a> {
-        SectionIterator { mapiter: self.sections.iter(), }
+        SectionIterator { mapiter: self.sections.iter() }
     }
 
     /// Mutable iterate though sections
     /// *Deprecated! Use `iter_mut` instead!*
     pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.iter_mut(), }
+        SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
 
     /// Mutable iterate though sections
     pub fn iter_mut(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.iter_mut(), }
+        SectionMutIterator { mapiter: self.sections.iter_mut() }
     }
 }
 
@@ -596,7 +602,7 @@ impl IntoIterator for Ini {
     type IntoIter = SectionIntoIter;
 
     fn into_iter(self) -> SectionIntoIter {
-        SectionIntoIter { iter: self.sections.into_iter(), }
+        SectionIntoIter { iter: self.sections.into_iter() }
     }
 }
 
@@ -635,8 +641,8 @@ impl error::Error for ParseError {
 
 #[derive(Debug)]
 pub enum Error {
- Io(io::Error),
- Parse(ParseError),
+    Io(io::Error),
+    Parse(ParseError),
 }
 
 impl Display for Error {
@@ -656,10 +662,10 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            Error::Io(ref err) => err.cause(),
-            Error::Parse(ref err) => err.cause(),
+            Error::Io(ref err) => err.source(),
+            Error::Parse(ref err) => err.source(),
         }
     }
 }
@@ -671,7 +677,7 @@ impl<'a> Parser<'a> {
                              line: 0,
                              col: 0,
                              rdr,
-                             opt, };
+                             opt };
         p.bump();
         p
     }
@@ -697,7 +703,7 @@ impl<'a> Parser<'a> {
     fn error<U>(&self, msg: String) -> Result<U, ParseError> {
         Err(ParseError { line: self.line,
                          col: self.col,
-                         msg, })
+                         msg })
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -736,7 +742,7 @@ impl<'a> Parser<'a> {
                     Ok(sec) => {
                         let msec = &sec[..].trim();
                         cursec = Some(msec.to_string());
-                        result.sections.entry(cursec.clone()).or_insert_with(HashMap::new);
+                        result.sections.entry(cursec.clone()).or_insert_with(MultiMap::new);
                         self.bump();
                     }
                     Err(e) => return Err(e),
@@ -748,7 +754,7 @@ impl<'a> Parser<'a> {
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
-                            let sec = result.sections.entry(cursec.clone()).or_insert_with(HashMap::new);
+                            let sec = result.sections.entry(cursec.clone()).or_insert_with(MultiMap::new);
                             sec.insert(curkey, mval);
                             curkey = "".into();
                         }
@@ -855,18 +861,18 @@ impl<'a> Parser<'a> {
             Some('"') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('"')]).and_then(|s| {
-                                                                self.bump(); // Eats the last "
-                                                                             // Parse until EOL
-                                                                self.parse_str_until_eol().map(|x| s + &x)
-                                                            })
+                                                      self.bump(); // Eats the last "
+                                                                   // Parse until EOL
+                                                      self.parse_str_until_eol().map(|x| s + &x)
+                                                  })
             }
             Some('\'') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('\'')]).and_then(|s| {
-                                                                 self.bump(); // Eats the last '
-                                                                              // Parse until EOL
-                                                                 self.parse_str_until_eol().map(|x| s + &x)
-                                                             })
+                                                       self.bump(); // Eats the last '
+                                                                    // Parse until EOL
+                                                       self.parse_str_until_eol().map(|x| s + &x)
+                                                   })
             }
             _ => self.parse_str_until_eol(),
         }
@@ -1174,7 +1180,9 @@ B=b";
 Exec = \"/path/to/exe with space\" arg
 ";
 
-        let opt = Ini::load_from_str_opt(input, ParseOption { enabled_quote: false, ..ParseOption::default()}).unwrap();
+        let opt = Ini::load_from_str_opt(input,
+                                         ParseOption { enabled_quote: false,
+                                                       ..ParseOption::default() }).unwrap();
         let sec = opt.section(Some("Desktop Entry")).unwrap();
         assert_eq!(sec["Exec"], "\"/path/to/exe with space\" arg");
     }
