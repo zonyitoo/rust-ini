@@ -85,9 +85,9 @@ impl EscapePolicy {
     /// per this policy or false if not.
     pub fn should_escape(self, c: char) -> bool {
         match c {
-            '\\' | '\x00'...'\x1f' | '\x7f'...'\u{00ff}' => self.escape_basics(),
+            '\\' | '\x00'..='\x1f' | '\x7f'..='\u{00ff}' => self.escape_basics(),
             ';' | '#' | '=' | ':' => self.escape_reserved(),
-            '\u{0080}'...'\u{FFFF}' => self.escape_unicode(),
+            '\u{0080}'..='\u{FFFF}' => self.escape_unicode(),
             _ => false,
         }
     }
@@ -122,7 +122,7 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01'...'\x06' | '\x0e'...'\x1f' | '\x7f'...'\u{00ff}' => {
+            '\x01'..='\x06' | '\x0e'..='\x1f' | '\x7f'..='\u{00ff}' => {
                 escaped.push_str(&format!("\\x{:04x}", c as isize)[..])
             }
             '\x07' => escaped.push_str("\\a"),
@@ -132,7 +132,7 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
             '\n' => escaped.push_str("\\n"),
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
-            '\u{0080}'...'\u{FFFF}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
+            '\u{0080}'..='\u{FFFF}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
             _ => {
                 escaped.push('\\');
                 escaped.push(c);
