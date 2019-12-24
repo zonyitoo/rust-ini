@@ -21,23 +21,22 @@
 
 //! Ini
 
-use std::borrow::Borrow;
 use std::char;
-use std::cmp::Eq;
 use std::error;
 
-use std::collections::hash_map::Entry;
-use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys};
-use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::fs::{File, OpenOptions};
-use std::hash::Hash;
 use std::io::{self, Read, Write};
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::Chars;
 
+#[cfg(feature = "preserve_order")]
+use indexmap::map::{Entry, IndexMap as Map, IntoIter, Iter, IterMut, Keys};
+#[cfg(not(feature = "preserve_order"))]
 use multimap::MultiMap;
+#[cfg(not(feature = "preserve_order"))]
+use std::collections::hash_map::{Entry, HashMap as Map, IntoIter, Iter, IterMut, Keys};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EscapePolicy {
@@ -192,20 +191,17 @@ impl<'a> SectionSetter<'a> {
               V: Into<String>
     {
         {
-            let prop = match self.ini.sections.entry(self.section_name.clone()) {
-                Entry::Vacant(entry) => entry.insert(MultiMap::new()),
-                Entry::Occupied(entry) => entry.into_mut(),
-            };
+            let prop = self.ini
+                           .sections
+                           .entry(self.section_name.clone())
+                           .or_insert_with(Default::default);
             prop.insert(key.into(), value.into());
         }
         self
     }
 
     /// Delete the entry in this section with `key`
-    pub fn delete<K>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a>
-        where String: Borrow<K>,
-              K: Hash + Eq + ?Sized
-    {
+    pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
         if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
             prop.remove(key);
         }
@@ -213,24 +209,132 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Get the entry in this section with `key`
-    pub fn get<K>(&'a mut self, key: &K) -> Option<&'a str>
-        where String: Borrow<K>,
-              K: Hash + Eq + ?Sized
-    {
+    pub fn get<K: AsRef<str>>(&'a mut self, key: K) -> Option<&'a str> {
         self.ini
             .sections
             .get(&self.section_name)
-            .and_then(|prop| prop.get(key).map(|s| &s[..]))
+            .and_then(|prop| prop.get(key))
+            .map(|s| s.as_ref())
     }
 }
 
+#[cfg(not(feature = "preserve_order"))]
+type PropertiesImpl<K, V> = MultiMap<K, V>;
+#[cfg(feature = "preserve_order")]
+type PropertiesImpl<K, V> = Vec<(K, V)>;
+
 /// Properties type (key-value pairs)
-pub type Properties = MultiMap<String, String>; // Key-value pairs
+#[derive(Clone, Default, Debug, PartialEq)]
+pub struct Properties {
+    data: PropertiesImpl<String, String>,
+}
+
+impl Properties {
+    pub fn new() -> Properties {
+        Default::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.data.iter().map(|(k, v)| (k, v))
+    }
+
+    pub fn contains_key<S: AsRef<str>>(&self, s: S) -> bool {
+        self.iter().find(|(k, _)| *k == s.as_ref()).is_some()
+    }
+}
+
+#[cfg(not(feature = "preserve_order"))]
+impl Properties {
+    pub fn insert<K, V>(&mut self, k: K, v: V)
+        where K: Into<String>,
+              V: Into<String>
+    {
+        self.data.insert(k.into(), v.into());
+    }
+
+    pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
+        self.data.get(s.as_ref())
+    }
+
+    pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
+        self.data.get_mut(s.as_ref())
+    }
+
+    pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
+        self.data.remove(s.as_ref())
+    }
+}
+
+#[cfg(feature = "preserve_order")]
+impl Properties {
+    pub fn insert<K, V>(&mut self, k: K, v: V)
+        where K: Into<String>,
+              V: Into<String>
+    {
+        self.data.push((k.into(), v.into()));
+    }
+
+    pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
+        for (k, v) in &self.data {
+            if k == s.as_ref() {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
+        for (k, v) in &mut self.data {
+            if k == s.as_ref() {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
+        let len = self.data.len();
+        let mut data = Vec::with_capacity(len);
+        let mut ret = Vec::with_capacity(len);
+
+        std::mem::swap(&mut self.data, &mut data);
+
+        for (k, v) in data {
+            if k == s.as_ref() {
+                ret.push(v);
+            } else {
+                self.data.push((k, v))
+            }
+        }
+
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+}
+
+impl<S: AsRef<str>> Index<S> for Properties {
+    type Output = String;
+
+    fn index(&self, index: S) -> &String {
+        let s = index.as_ref();
+        match self.get(s) {
+            Some(p) => p,
+            None => panic!("Key `{}` does not exist", s),
+        }
+    }
+}
 
 /// Ini struct
 #[derive(Clone, Default)]
 pub struct Ini {
-    sections: HashMap<Option<String>, Properties>,
+    sections: Map<Option<String>, Properties>,
 }
 
 impl Ini {
@@ -634,7 +738,7 @@ impl error::Error for ParseError {
         self.msg.as_str()
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }
@@ -742,7 +846,7 @@ impl<'a> Parser<'a> {
                     Ok(sec) => {
                         let msec = &sec[..].trim();
                         cursec = Some(msec.to_string());
-                        result.sections.entry(cursec.clone()).or_insert_with(MultiMap::new);
+                        result.sections.entry(cursec.clone()).or_insert_with(Default::default);
                         self.bump();
                     }
                     Err(e) => return Err(e),
@@ -754,7 +858,7 @@ impl<'a> Parser<'a> {
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
-                            let sec = result.sections.entry(cursec.clone()).or_insert_with(MultiMap::new);
+                            let sec = result.sections.entry(cursec.clone()).or_insert_with(Default::default);
                             sec.insert(curkey, mval);
                             curkey = "".into();
                         }
@@ -1029,8 +1133,7 @@ Comment[tr]=İnternet'e erişin
 Comment[uk]=Доступ до Інтернету
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("Test"), "Comment[tr]").unwrap(),
-                   "İnternet'e erişin");
+        assert_eq!(ini.get_from(Some("Test"), "Comment[tr]").unwrap(), "İnternet'e erişin");
     }
 
     #[test]
@@ -1185,5 +1288,88 @@ Exec = \"/path/to/exe with space\" arg
                                                        ..ParseOption::default() }).unwrap();
         let sec = opt.section(Some("Desktop Entry")).unwrap();
         assert_eq!(sec["Exec"], "\"/path/to/exe with space\" arg");
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "preserve_order")]
+mod preserve_order {
+    use ini::*;
+
+    #[test]
+    fn test_preserve_order_section() {
+        let input = r"
+none2 = n2
+[SB]
+p2 = 2
+[SA]
+x2 = 2
+[SC]
+cd1 = x
+[xC]
+xd = x
+        ";
+
+        let data = Ini::load_from_str(input).unwrap();
+        let keys: Vec<Option<&str>> = data.iter().map(|(k, _)| k.as_ref().map(|s| s.as_ref())).collect();
+
+        assert_eq!(keys.len(), 5);
+        assert_eq!(keys[0], None);
+        assert_eq!(keys[1], Some("SB"));
+        assert_eq!(keys[2], Some("SA"));
+        assert_eq!(keys[3], Some("SC"));
+        assert_eq!(keys[4], Some("xC"));
+    }
+
+    #[test]
+    fn test_preserve_order_property() {
+        let input = r"
+x2 = n2
+x1 = n2
+x3 = n2
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let section = data.general_section();
+        let keys: Vec<&str> = section.iter().map(|(k, _)| k.as_ref()).collect();
+        assert_eq!(keys, vec!["x2", "x1", "x3"]);
+    }
+
+    #[test]
+    fn test_preserve_order_property_in_section() {
+        let input = r"
+[s]
+x2 = n2
+xb = n2
+a3 = n3
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let section = data.section(Some("s")).unwrap();
+        let keys: Vec<&str> = section.iter().map(|(k, _)| k.as_ref()).collect();
+        assert_eq!(keys, vec!["x2", "xb", "a3"])
+    }
+
+    #[test]
+    fn test_preserve_order_write() {
+        let input = r"
+x2 = n2
+x1 = n2
+x3 = n2
+[s]
+x2 = n2
+xb = n2
+a3 = n3
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let mut buf = vec![];
+        data.write_to(&mut buf).unwrap();
+        let new_data = Ini::load_from_str(&String::from_utf8(buf).unwrap()).unwrap();
+
+        let sec0 = new_data.general_section();
+        let keys0: Vec<&str> = sec0.iter().map(|(k, _)| k.as_ref()).collect();
+        assert_eq!(keys0, vec!["x2", "x1", "x3"]);
+
+        let sec1 = new_data.section(Some("s")).unwrap();
+        let keys1: Vec<&str> = sec1.iter().map(|(k, _)| k.as_ref()).collect();
+        assert_eq!(keys1, vec!["x2", "xb", "a3"]);
     }
 }

@@ -42,6 +42,9 @@
 //! }
 //! ```
 
+#[cfg(feature = "preserve_order")]
+extern crate indexmap;
+#[cfg(not(feature = "preserve_order"))]
 extern crate multimap;
 
 pub use ini::{Ini, ParseOption};
