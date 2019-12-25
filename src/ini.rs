@@ -265,13 +265,14 @@ impl Properties {
         Some(ret)
     }
 
-    pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
-        self.data.get_mut(s.as_ref())
-    }
-
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
         self.data.remove(s.as_ref())
     }
+
+    fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
+        self.data.get_mut(s.as_ref())
+    }
+
 }
 
 #[cfg(feature = "preserve_order")]
@@ -306,15 +307,6 @@ impl Properties {
         }
     }
 
-    pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
-        for (k, v) in &mut self.data {
-            if k == s.as_ref() {
-                return Some(v);
-            }
-        }
-        None
-    }
-
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
         let len = self.data.len();
         let mut data = Vec::with_capacity(len);
@@ -335,6 +327,15 @@ impl Properties {
         } else {
             Some(ret)
         }
+    }
+
+    fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
+        for (k, v) in &mut self.data {
+            if k == s.as_ref() {
+                return Some(v);
+            }
+        }
+        None
     }
 }
 
@@ -1024,6 +1025,18 @@ mod test {
 
         let res = props.get_vec("k2");
         assert_eq!(res, None);
+    }
+
+    #[test]
+    fn test_property_remove() {
+        let mut props = Properties::new();
+        props.insert("k1", "v1");
+        props.insert("k1", "v2");
+
+        let mut res = props.remove("k1").unwrap();
+        res.sort();
+        assert_eq!(res, vec!["v1", "v2"]);
+        assert!(!props.contains_key("k1"));
     }
 
     #[test]
