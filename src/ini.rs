@@ -230,18 +230,22 @@ pub struct Properties {
 }
 
 impl Properties {
+    /// Create an instance
     pub fn new() -> Properties {
         Default::default()
     }
 
+    /// Get the number of the properties
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
+    /// Get an iterator of the properties
     pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
         self.data.iter().map(|(k, v)| (k, v))
     }
 
+    /// Return true if property exist
     pub fn contains_key<S: AsRef<str>>(&self, s: S) -> bool {
         self.iter().find(|(k, _)| *k == s.as_ref()).is_some()
     }
@@ -249,6 +253,7 @@ impl Properties {
 
 #[cfg(not(feature = "preserve_order"))]
 impl Properties {
+    /// Insert (key, value) pair
     pub fn insert<K, V>(&mut self, k: K, v: V)
         where K: Into<String>,
               V: Into<String>
@@ -256,15 +261,18 @@ impl Properties {
         self.data.insert(k.into(), v.into());
     }
 
+    /// Get the first value associate with the key
     pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
         self.data.get(s.as_ref())
     }
 
+    /// Get all values associate with the key
     pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
         let ret = self.data.get_vec(s.as_ref())?.iter().collect();
         Some(ret)
     }
 
+    /// Remove the property
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
         self.data.remove(s.as_ref())
     }
@@ -272,11 +280,11 @@ impl Properties {
     fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
         self.data.get_mut(s.as_ref())
     }
-
 }
 
 #[cfg(feature = "preserve_order")]
 impl Properties {
+    /// Insert (key, value) pair
     pub fn insert<K, V>(&mut self, k: K, v: V)
         where K: Into<String>,
               V: Into<String>
@@ -284,6 +292,7 @@ impl Properties {
         self.data.push((k.into(), v.into()));
     }
 
+    /// Get the first value associate with the key
     pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
         for (k, v) in &self.data {
             if k == s.as_ref() {
@@ -293,6 +302,7 @@ impl Properties {
         None
     }
 
+    /// Get all values associate with the key
     pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
         let ret: Vec<_> = self.data
                               .iter()
@@ -307,6 +317,7 @@ impl Properties {
         }
     }
 
+    /// Remove the property
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
         let len = self.data.len();
         let mut data = Vec::with_capacity(len);
