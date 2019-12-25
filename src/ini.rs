@@ -260,6 +260,11 @@ impl Properties {
         self.data.get(s.as_ref())
     }
 
+    pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
+        let ret = self.data.get_vec(s.as_ref())?.iter().collect();
+        Some(ret)
+    }
+
     pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
         self.data.get_mut(s.as_ref())
     }
@@ -285,6 +290,20 @@ impl Properties {
             }
         }
         None
+    }
+
+    pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
+        let ret: Vec<_> = self.data
+                              .iter()
+                              .filter(|(k, _)| k == s.as_ref())
+                              .map(|(_, v)| v)
+                              .collect();
+
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
     }
 
     pub fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
@@ -992,6 +1011,20 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod test {
     use ini::*;
+
+    #[test]
+    fn test_property_get_vec() {
+        let mut props = Properties::new();
+        props.insert("k1", "v1");
+        props.insert("k1", "v2");
+
+        let mut res = props.get_vec("k1").unwrap();
+        res.sort();
+        assert_eq!(res, vec!["v1", "v2"]);
+
+        let res = props.get_vec("k2");
+        assert_eq!(res, None);
+    }
 
     #[test]
     fn load_from_str_with_valid_input() {
