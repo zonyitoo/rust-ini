@@ -16,9 +16,7 @@ fn main() {
         .set("name", "Sun Yat-sen U")
         .set("location", "Guangzhou=world\x0ahahaha");
 
-    conf.section_mut(Some("Library"))
-        .unwrap()
-        .insert("seats".into(), "42".into());
+    conf.section_mut(Some("Library")).unwrap().insert("seats", "42");
 
     println!("---------------------------------------");
     println!("Writing to file {:?}\n", CONF_FILE_NAME);
