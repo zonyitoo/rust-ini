@@ -764,15 +764,7 @@ impl Display for ParseError {
     }
 }
 
-impl error::Error for ParseError {
-    fn description(&self) -> &str {
-        self.msg.as_str()
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
-}
+impl error::Error for ParseError {}
 
 #[derive(Debug)]
 pub enum Error {
@@ -790,13 +782,6 @@ impl Display for Error {
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Io(ref err) => err.description(),
-            Error::Parse(ref err) => err.description(),
-        }
-    }
-
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Error::Io(ref err) => err.source(),
