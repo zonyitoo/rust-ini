@@ -999,7 +999,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
+        self.parse_str_until(&[Some('\n'), Some('\r'), None])
     }
 }
 
@@ -1072,14 +1072,14 @@ mod test {
     }
 
     #[test]
-    fn test_inline_comment() {
+    fn test_inline_comment_not_supported() {
         let input = "
 [section name]
 name = hello # abcdefg
 gender = mail ; abdddd
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
+        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello # abcdefg");
     }
 
     #[test]
@@ -1111,8 +1111,8 @@ gender = mail ; abdddd
     fn test_colon() {
         let input = "
 [section name]
-name: hello # abcdefg
-gender : mail ; abdddd
+name: hello
+gender : mail
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
