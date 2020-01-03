@@ -19,4 +19,14 @@ indexmap = { version = "1.3", optional = true }
 
 [features]
 default = []
+# Sections and Properties will preserve order of keys in the original input
 preserve_order = ["indexmap"]
+# Allowing inline comments
+#
+# For example:
+#
+# [A]
+# Key=value # COMMENTS
+#
+# This was a default feature < 0.14.0
+inline_comment = []

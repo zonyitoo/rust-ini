@@ -10,4 +10,5 @@ cache: cargo
 script:
     - cargo test -v --no-fail-fast
     - cargo test -v --no-fail-fast --features preserve_order
+    - cargo test -v --no-fail-fast --features inline_comment
     - cargo doc --no-deps

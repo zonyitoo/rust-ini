@@ -894,10 +894,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn error<U>(&self, msg: String) -> Result<U, ParseError> {
+    fn error<U, M: Into<String>>(&self, msg: M) -> Result<U, ParseError> {
         Err(ParseError { line: self.line,
                          col: self.col,
-                         msg })
+                         msg: msg.into() })
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -930,6 +930,15 @@ impl<'a> Parser<'a> {
         while let Some(cur_ch) = self.ch {
             match cur_ch {
                 ';' | '#' => {
+                    if cfg!(not(feature = "inline_comment")) {
+                        // Inline comments is not supported, so comments must starts from a new line
+                        //
+                        // https://en.wikipedia.org/wiki/INI_file#Comments
+                        if self.col > 1 {
+                            return self.error("doesn't support inline comment");
+                        }
+                    }
+
                     self.parse_comment();
                 }
                 '[' => match self.parse_section() {
@@ -943,7 +952,7 @@ impl<'a> Parser<'a> {
                 },
                 '=' | ':' => {
                     if (&curkey[..]).is_empty() {
-                        return self.error("Missing key".to_string());
+                        return self.error("missing key");
                     }
                     match self.parse_val() {
                         Ok(val) => {
@@ -985,12 +994,12 @@ impl<'a> Parser<'a> {
         while !endpoint.contains(&self.ch) {
             match self.ch {
                 None => {
-                    return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
+                    return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
                 }
                 Some('\\') if self.opt.enabled_escape => {
                     self.bump();
                     if self.eof() {
-                        return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
+                        return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
                     }
                     match self.ch.unwrap() {
                         '0' => result.push('\0'),
@@ -1006,11 +1015,11 @@ impl<'a> Parser<'a> {
                             for _ in 0..4 {
                                 self.bump();
                                 if self.eof() {
-                                    return self.error(format!("Expecting \"{:?}\" but found EOF.", endpoint));
+                                    return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
                                 } else if let Some('\\') = self.ch {
                                     self.bump();
                                     if self.ch != Some('\n') {
-                                        return self.error(format!("Expecting \"\\\\n\" but \
+                                        return self.error(format!("expecting \"\\\\n\" but \
                                                                    found \"{:?}\".",
                                                                   self.ch));
                                     }
@@ -1020,7 +1029,7 @@ impl<'a> Parser<'a> {
                             let r = u32::from_str_radix(&code[..], 16);
                             match r {
                                 Ok(c) => result.push(char::from_u32(c).unwrap()),
-                                Err(_) => return self.error("Unknown character.".to_string()),
+                                Err(_) => return self.error("unknown character in \\xHH form"),
                             }
                         }
                         c => result.push(c),
@@ -1072,8 +1081,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[cfg(not(feature = "inline_comment"))]
     fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('\n'), Some('\r'), None])
+    }
+
+    #[cfg(feature = "inline_comment")]
+    fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
+        self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
     }
 }
 
@@ -1145,6 +1160,7 @@ mod test {
         assert!(opt.is_ok());
     }
 
+    #[cfg(not(feature = "inline_comment"))]
     #[test]
     fn test_inline_comment_not_supported() {
         let input = "
@@ -1154,6 +1170,20 @@ gender = mail ; abdddd
 ";
         let ini = Ini::load_from_str(input).unwrap();
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello # abcdefg");
+        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail ; abdddd");
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "inline_comment"), should_panic)]
+    fn test_inline_comment() {
+        let input = "
+[section name] # comment in section line
+name = hello # abcdefg
+gender = mail ; abdddd
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
+        assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
     }
 
     #[test]
