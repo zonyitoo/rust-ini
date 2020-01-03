@@ -176,7 +176,7 @@ impl Default for ParseOption {
 
 /// Newline style
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum LineSpearator {
+pub enum LineSeparator {
     /// System-dependent line separator
     ///
     /// On UNIX system, uses "\n"
@@ -196,19 +196,19 @@ static DEFAULT_LINE_SEPARATOR: &str = "\n";
 #[cfg(windows)]
 static DEFAULT_LINE_SEPARATOR: &str = "\r\n";
 
-impl fmt::Display for LineSpearator {
+impl fmt::Display for LineSeparator {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(self.as_str())
     }
 }
 
-impl LineSpearator {
+impl LineSeparator {
     /// String representation
     pub fn as_str(&self) -> &'static str {
         match *self {
-            LineSpearator::SystemDefault => DEFAULT_LINE_SEPARATOR,
-            LineSpearator::CR => "\n",
-            LineSpearator::CRLF => "\r\n",
+            LineSeparator::SystemDefault => DEFAULT_LINE_SEPARATOR,
+            LineSeparator::CR => "\n",
+            LineSeparator::CRLF => "\r\n",
         }
     }
 }
@@ -219,13 +219,13 @@ pub struct WriteOption {
     pub escape_policy: EscapePolicy,
 
     /// Newline style
-    pub line_separator: LineSpearator,
+    pub line_separator: LineSeparator,
 }
 
 impl Default for WriteOption {
     fn default() -> WriteOption {
         WriteOption { escape_policy: EscapePolicy::Basics,
-                      line_separator: LineSpearator::SystemDefault }
+                      line_separator: LineSeparator::SystemDefault }
     }
 }
 
