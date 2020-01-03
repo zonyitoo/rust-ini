@@ -190,7 +190,7 @@ pub enum LineSeparator {
     CRLF,
 }
 
-#[cfg(unix)]
+#[cfg(not(windows))]
 static DEFAULT_LINE_SEPARATOR: &str = "\n";
 
 #[cfg(windows)]
@@ -1517,5 +1517,56 @@ a3 = n3
         let sec1 = new_data.section(Some("s")).unwrap();
         let keys1: Vec<&str> = sec1.iter().map(|(k, _)| k.as_ref()).collect();
         assert_eq!(keys1, vec!["x2", "xb", "a3"]);
+    }
+
+    #[test]
+    fn write_line_separator() {
+        use std::str;
+
+        let mut ini = Ini::new();
+        ini.with_section(Some("Section1"))
+           .set("Key1", "Value")
+           .set("Key2", "Value");
+        ini.with_section(Some("Section2"))
+           .set("Key1", "Value")
+           .set("Key2", "Value");
+
+        {
+            let mut buf = Vec::new();
+            ini.write_to_opt(&mut buf,
+                             WriteOption { line_separator: LineSeparator::CR,
+                                           ..Default::default() })
+               .unwrap();
+
+            assert_eq!("[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
+                       str::from_utf8(&buf).unwrap());
+        }
+
+        {
+            let mut buf = Vec::new();
+            ini.write_to_opt(&mut buf,
+                             WriteOption { line_separator: LineSeparator::CRLF,
+                                           ..Default::default() })
+               .unwrap();
+
+            assert_eq!("[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
+                       str::from_utf8(&buf).unwrap());
+        }
+
+        {
+            let mut buf = Vec::new();
+            ini.write_to_opt(&mut buf,
+                             WriteOption { line_separator: LineSeparator::SystemDefault,
+                                           ..Default::default() })
+               .unwrap();
+
+            if cfg!(windows) {
+                assert_eq!("[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
+                           str::from_utf8(&buf).unwrap());
+            } else {
+                assert_eq!("[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
+                           str::from_utf8(&buf).unwrap());
+            }
+        }
     }
 }
