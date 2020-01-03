@@ -1410,7 +1410,7 @@ Exec = \"/path/to/exe with space\" arg
 #[cfg(test)]
 #[cfg(feature = "preserve_order")]
 mod preserve_order {
-    use ini::*;
+    use super::*;
 
     #[test]
     fn test_preserve_order_section() {
