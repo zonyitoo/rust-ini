@@ -7,13 +7,14 @@ repository = "https://github.com/zonyitoo/rust-ini"
 documentation = "https://docs.rs/rust-ini/"
 keywords = ["ini", "configuration", "conf", "cfg"]
 license = "MIT"
+edition = "2018"
 
 [lib]
 name = "ini"
 test = true
 
 [dependencies]
-multimap = "0.5.0"
+multimap = "0.8"
 indexmap = { version = "1.3", optional = true }
 
 [features]

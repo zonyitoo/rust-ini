@@ -174,6 +174,61 @@ impl Default for ParseOption {
     }
 }
 
+/// Newline style
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum LineSpearator {
+    /// System-dependent line separator
+    ///
+    /// On UNIX system, uses "\n"
+    /// On Windows system, uses "\r\n"
+    SystemDefault,
+
+    /// Uses "\n" as new line separator
+    CR,
+
+    /// Uses "\r\n" as new line separator
+    CRLF,
+}
+
+#[cfg(unix)]
+static DEFAULT_LINE_SEPARATOR: &str = "\n";
+
+#[cfg(windows)]
+static DEFAULT_LINE_SEPARATOR: &str = "\r\n";
+
+impl fmt::Display for LineSpearator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(self.as_str())
+    }
+}
+
+impl LineSpearator {
+    /// String representation
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            LineSpearator::SystemDefault => DEFAULT_LINE_SEPARATOR,
+            LineSpearator::CR => "\n",
+            LineSpearator::CRLF => "\r\n",
+        }
+    }
+}
+
+/// Writing configuration
+pub struct WriteOption {
+    /// Policies about how to escape characters
+    pub escape_policy: EscapePolicy,
+
+    /// Newline style
+    pub line_separator: LineSpearator,
+}
+
+impl Default for WriteOption {
+    fn default() -> WriteOption {
+        WriteOption { escape_policy: EscapePolicy::Basics,
+                      line_separator: LineSpearator::SystemDefault }
+    }
+}
+
 /// A setter which could be used to set key-value pair in a specified section
 pub struct SectionSetter<'a> {
     ini: &'a mut Ini,
@@ -552,20 +607,36 @@ impl Ini {
         self.write_to_policy(&mut file, policy)
     }
 
+    /// Write to a file with options
+    pub fn write_to_file_opt<P: AsRef<Path>>(&self, filename: P, opt: WriteOption) -> io::Result<()> {
+        let mut file = OpenOptions::new().write(true)
+                                         .truncate(true)
+                                         .create(true)
+                                         .open(filename.as_ref())?;
+        self.write_to_opt(&mut file, opt)
+    }
+
     /// Write to a writer
     pub fn write_to<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        self.write_to_policy(writer, EscapePolicy::Basics)
+        self.write_to_opt(writer, Default::default())
     }
 
     /// Write to a writer
     pub fn write_to_policy<W: Write>(&self, writer: &mut W, policy: EscapePolicy) -> io::Result<()> {
+        self.write_to_opt(writer,
+                          WriteOption { escape_policy: policy,
+                                        ..Default::default() })
+    }
+
+    /// Write to a writer with options
+    pub fn write_to_opt<W: Write>(&self, writer: &mut W, opt: WriteOption) -> io::Result<()> {
         let mut firstline = true;
 
         if let Some(props) = self.sections.get(&None) {
             for (k, v) in props.iter() {
-                let k_str = escape_str(&k[..], policy);
-                let v_str = escape_str(&v[..], policy);
-                writeln!(writer, "{}={}", k_str, v_str)?;
+                let k_str = escape_str(&k[..], opt.escape_policy);
+                let v_str = escape_str(&v[..], opt.escape_policy);
+                write!(writer, "{}={}{}", k_str, v_str, opt.line_separator)?;
             }
             firstline = false;
         }
@@ -574,16 +645,19 @@ impl Ini {
             if firstline {
                 firstline = false;
             } else {
-                writer.write_all(b"\n")?;
+                writer.write_all(opt.line_separator.as_str().as_bytes())?;
             }
 
             if let Some(ref section) = *section {
-                writeln!(writer, "[{}]", escape_str(&section[..], policy))?;
+                write!(writer,
+                       "[{}]{}",
+                       escape_str(&section[..], opt.escape_policy),
+                       opt.line_separator)?;
 
                 for (k, v) in props.iter() {
-                    let k_str = escape_str(&k[..], policy);
-                    let v_str = escape_str(&v[..], policy);
-                    writeln!(writer, "{}={}", k_str, v_str)?;
+                    let k_str = escape_str(&k[..], opt.escape_policy);
+                    let v_str = escape_str(&v[..], opt.escape_policy);
+                    write!(writer, "{}={}{}", k_str, v_str, opt.line_separator)?;
                 }
             }
         }
@@ -1007,7 +1081,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-    use ini::*;
+    use super::*;
 
     #[test]
     fn test_property_get_vec() {
