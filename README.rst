@@ -21,7 +21,7 @@ This is an INI file parser in Rust_.
 .. code:: toml
 
     [dependencies]
-    rust-ini = "0.13"
+    rust-ini = "0.14"
 
 Usage
 =====
