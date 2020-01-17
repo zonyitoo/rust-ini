@@ -204,8 +204,8 @@ impl fmt::Display for LineSeparator {
 
 impl LineSeparator {
     /// String representation
-    pub fn as_str(&self) -> &'static str {
-        match *self {
+    pub fn as_str(self) -> &'static str {
+        match self {
             LineSeparator::SystemDefault => DEFAULT_LINE_SEPARATOR,
             LineSeparator::CR => "\n",
             LineSeparator::CRLF => "\r\n",
@@ -295,6 +295,11 @@ impl Properties {
         self.data.len()
     }
 
+    /// Check if properties has 0 elements
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     /// Get an iterator of the properties
     pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
         self.data.iter().map(|(k, v)| (k, v))
@@ -302,7 +307,7 @@ impl Properties {
 
     /// Return true if property exist
     pub fn contains_key<S: AsRef<str>>(&self, s: S) -> bool {
-        self.iter().find(|(k, _)| *k == s.as_ref()).is_some()
+        self.iter().any(|(k, _)| *k == s.as_ref())
     }
 }
 
@@ -943,8 +948,8 @@ impl<'a> Parser<'a> {
                 }
                 '[' => match self.parse_section() {
                     Ok(sec) => {
-                        let msec = &sec[..].trim();
-                        cursec = Some(msec.to_string());
+                        let msec = sec[..].trim();
+                        cursec = Some((*msec).to_string());
                         result.sections.entry(cursec.clone()).or_insert_with(Default::default);
                         self.bump();
                     }
