@@ -29,18 +29,18 @@ fn main() {
     let i = Ini::load_from_file(CONF_FILE_NAME).unwrap();
 
     println!("Iterating");
-    let general_section_name = "__General__".into();
+    let general_section_name = "__General__";
     for (sec, prop) in i.iter() {
         let section_name = sec.as_ref().unwrap_or(&general_section_name);
         println!("-- Section: {:?} begins", section_name);
         for (k, v) in prop.iter() {
-            println!("{}: {:?}", *k, *v);
+            println!("{}: {:?}", k, v);
         }
     }
     println!();
 
     let section = i.section(Some("User")).unwrap();
     println!("name={}", section.get("name").unwrap());
-    println!("conf[User][name]={}", i["User"]["name"]);
+    println!("conf[User][name]={}", &i["User"]["name"]);
     println!("General Section: {:?}", i.general_section());
 }

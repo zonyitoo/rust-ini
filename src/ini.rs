@@ -23,7 +23,6 @@
 
 use std::char;
 use std::error;
-
 use std::fmt::{self, Display};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
@@ -31,13 +30,13 @@ use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::Chars;
 
-#[cfg(feature = "preserve_order")]
-use indexmap::map::{Entry, IndexMap as Map, IntoIter, Iter, IterMut, Keys};
-#[cfg(not(feature = "preserve_order"))]
-use multimap::MultiMap;
-#[cfg(not(feature = "preserve_order"))]
-use std::collections::hash_map::{Entry, HashMap as Map, IntoIter, Iter, IterMut, Keys};
+use cfg_if::cfg_if;
+use ordered_multimap::list_ordered_multimap::{Entry, Iter, IterMut, OccupiedEntry, VacantEntry};
+use ordered_multimap::ListOrderedMultimap;
+#[cfg(feature = "case-insensitive")]
+use unicase::UniCase;
 
+/// Policies for escaping logic
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EscapePolicy {
     /// escape absolutely nothing (dangerous)
@@ -143,7 +142,7 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
 
 /// Parsing configuration
 pub struct ParseOption {
-    /// Allow quote (" or ') in value
+    /// Allow quote (`"` or `'`) in value
     /// For example
     /// ```ini
     /// [Section]
@@ -229,6 +228,57 @@ impl Default for WriteOption {
     }
 }
 
+cfg_if! {
+    if #[cfg(feature = "case-insensitive")] {
+        /// Internal storage of section's key
+        pub type SectionKey = Option<UniCase<String>>;
+        /// Internal storage of property's key
+        pub type PropertyKey = UniCase<String>;
+
+        macro_rules! property_get_key {
+            ($s:expr) => {
+                &UniCase::from($s)
+            };
+        }
+
+        macro_rules! property_insert_key {
+            ($s:expr) => {
+                UniCase::from($s)
+            };
+        }
+
+        macro_rules! section_key {
+            ($s:expr) => {
+                $s.map(|s| UniCase::from(s.into()))
+            };
+        }
+
+    } else {
+        /// Internal storage of section's key
+        pub type SectionKey = Option<String>;
+        /// Internal storage of property's key
+        pub type PropertyKey = String;
+
+        macro_rules! property_get_key {
+            ($s:expr) => {
+                $s
+            };
+        }
+
+        macro_rules! property_insert_key {
+            ($s:expr) => {
+                $s
+            };
+        }
+
+        macro_rules! section_key {
+            ($s:expr) => {
+                $s.map(Into::into)
+            };
+        }
+    }
+}
+
 /// A setter which could be used to set key-value pair in a specified section
 pub struct SectionSetter<'a> {
     ini: &'a mut Ini,
@@ -240,48 +290,41 @@ impl<'a> SectionSetter<'a> {
         SectionSetter { ini, section_name }
     }
 
-    /// Set key-value pair in this section
+    /// Set key-value pair in this section (all with the same name)
     pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
         where K: Into<String>,
               V: Into<String>
     {
-        {
-            let prop = self.ini
-                           .sections
-                           .entry(self.section_name.clone())
-                           .or_insert_with(Default::default);
-            prop.insert(key.into(), value.into());
-        }
+        self.ini
+            .entry(self.section_name.clone())
+            .or_insert_with(Default::default)
+            .insert(key, value);
+
         self
     }
 
-    /// Delete the entry in this section with `key`
+    /// Delete the first entry in this section with `key`
     pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
-        if let Some(prop) = self.ini.sections.get_mut(&self.section_name) {
+        for prop in self.ini.section_all_mut(self.section_name.as_ref()) {
             prop.remove(key);
         }
+
         self
     }
 
     /// Get the entry in this section with `key`
     pub fn get<K: AsRef<str>>(&'a mut self, key: K) -> Option<&'a str> {
         self.ini
-            .sections
-            .get(&self.section_name)
+            .section(self.section_name.as_ref())
             .and_then(|prop| prop.get(key))
-            .map(|s| s.as_ref())
+            .map(AsRef::as_ref)
     }
 }
-
-#[cfg(not(feature = "preserve_order"))]
-type PropertiesImpl<K, V> = MultiMap<K, V>;
-#[cfg(feature = "preserve_order")]
-type PropertiesImpl<K, V> = Vec<(K, V)>;
 
 /// Properties type (key-value pairs)
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Properties {
-    data: PropertiesImpl<String, String>,
+    data: ListOrderedMultimap<PropertyKey, String>,
 }
 
 impl Properties {
@@ -292,7 +335,7 @@ impl Properties {
 
     /// Get the number of the properties
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.data.keys_len()
     }
 
     /// Check if properties has 0 elements
@@ -301,119 +344,60 @@ impl Properties {
     }
 
     /// Get an iterator of the properties
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.data.iter().map(|(k, v)| (k, v))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.data.iter().map(|(k, v)| (k.as_ref(), v.as_str()))
     }
 
     /// Return true if property exist
     pub fn contains_key<S: AsRef<str>>(&self, s: S) -> bool {
-        self.iter().any(|(k, _)| *k == s.as_ref())
+        self.data.contains_key(property_get_key!(s.as_ref()))
     }
-}
 
-#[cfg(not(feature = "preserve_order"))]
-impl Properties {
-    /// Insert (key, value) pair
+    /// Insert (key, value) pair by replace
     pub fn insert<K, V>(&mut self, k: K, v: V)
         where K: Into<String>,
               V: Into<String>
     {
-        self.data.insert(k.into(), v.into());
+        self.data.append(property_insert_key!(k.into()), v.into());
     }
 
-    /// Get the first value associate with the key
-    pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
-        self.data.get(s.as_ref())
-    }
-
-    /// Get all values associate with the key
-    pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
-        let ret = self.data.get_vec(s.as_ref())?.iter().collect();
-        Some(ret)
-    }
-
-    /// Remove the property
-    pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
-        self.data.remove(s.as_ref())
-    }
-
-    fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
-        self.data.get_mut(s.as_ref())
-    }
-}
-
-#[cfg(feature = "preserve_order")]
-impl Properties {
-    /// Insert (key, value) pair
-    pub fn insert<K, V>(&mut self, k: K, v: V)
+    /// Replace key with (key, value) pair
+    pub fn replace<K, V>(&mut self, k: K, v: V)
         where K: Into<String>,
               V: Into<String>
     {
-        self.data.push((k.into(), v.into()));
+        self.data.insert(property_insert_key!(k.into()), v.into());
     }
 
     /// Get the first value associate with the key
-    pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&String> {
-        for (k, v) in &self.data {
-            if k == s.as_ref() {
-                return Some(v);
-            }
-        }
-        None
+    pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&str> {
+        self.data.get(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
     /// Get all values associate with the key
-    pub fn get_vec<S: AsRef<str>>(&self, s: S) -> Option<Vec<&String>> {
-        let ret: Vec<_> = self.data
-                              .iter()
-                              .filter(|(k, _)| k == s.as_ref())
-                              .map(|(_, v)| v)
-                              .collect();
-
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+    pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl Iterator<Item = &str> {
+        self.data.get_all(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
-    /// Remove the property
-    pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<Vec<String>> {
-        let len = self.data.len();
-        let mut data = Vec::with_capacity(len);
-        let mut ret = Vec::with_capacity(len);
-
-        std::mem::swap(&mut self.data, &mut data);
-
-        for (k, v) in data {
-            if k == s.as_ref() {
-                ret.push(v);
-            } else {
-                self.data.push((k, v))
-            }
-        }
-
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+    /// Remove the property wiht the first value of the key
+    pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<String> {
+        self.data.remove(property_get_key!(s.as_ref()))
     }
 
-    fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut String> {
-        for (k, v) in &mut self.data {
-            if k == s.as_ref() {
-                return Some(v);
-            }
-        }
-        None
+    /// Remove the property with all values with the same key
+    pub fn remove_all<'a, S: AsRef<str>>(&'a mut self, s: S) -> impl Iterator<Item = String> + 'a {
+        self.data.remove_all(property_get_key!(s.as_ref()))
+    }
+
+    fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut str> {
+        self.data.get_mut(property_get_key!(s.as_ref())).map(|v| v.as_mut_str())
     }
 }
 
 impl<S: AsRef<str>> Index<S> for Properties {
-    type Output = String;
+    type Output = str;
 
-    fn index(&self, index: S) -> &String {
+    fn index(&self, index: S) -> &str {
         let s = index.as_ref();
         match self.get(s) {
             Some(p) => p,
@@ -422,10 +406,79 @@ impl<S: AsRef<str>> Index<S> for Properties {
     }
 }
 
+/// A view into a vacant entry in a `Ini`
+pub struct SectionVacantEntry<'a> {
+    inner: VacantEntry<'a, SectionKey, Properties>,
+}
+
+impl<'a> SectionVacantEntry<'a> {
+    /// Insert one new section
+    pub fn insert(self, value: Properties) -> &'a mut Properties {
+        self.inner.insert(value)
+    }
+}
+
+/// A view into a occupied entry in a `Ini`
+pub struct SectionOccupiedEntry<'a> {
+    inner: OccupiedEntry<'a, SectionKey, Properties>,
+}
+
+impl<'a> SectionOccupiedEntry<'a> {
+    /// Into the first internal mutable properties
+    pub fn into_mut(self) -> &'a mut Properties {
+        self.inner.into_mut()
+    }
+
+    /// Append a new section
+    pub fn append(&mut self, prop: Properties) {
+        self.inner.append(prop);
+    }
+
+    fn last_mut(&'a mut self) -> &'a mut Properties {
+        self.inner
+            .iter_mut()
+            .next_back()
+            .expect("occupied section shouldn't have 0 property")
+    }
+}
+
+/// A view into an `Ini`, which may either be vacant or occupied.
+pub enum SectionEntry<'a> {
+    Vacant(SectionVacantEntry<'a>),
+    Occupied(SectionOccupiedEntry<'a>),
+}
+
+impl<'a> SectionEntry<'a> {
+    /// Ensures a value is in the entry by inserting the default if empty, and returns a mutable reference to the value in the entry.
+    pub fn or_insert(self, properties: Properties) -> &'a mut Properties {
+        match self {
+            SectionEntry::Occupied(e) => e.into_mut(),
+            SectionEntry::Vacant(e) => e.insert(properties),
+        }
+    }
+
+    /// Ensures a value is in the entry by inserting the result of the default function if empty, and returns a mutable reference to the value in the entry.
+    pub fn or_insert_with<F: FnOnce() -> Properties>(self, default: F) -> &'a mut Properties {
+        match self {
+            SectionEntry::Occupied(e) => e.into_mut(),
+            SectionEntry::Vacant(e) => e.insert(default()),
+        }
+    }
+}
+
+impl<'a> From<Entry<'a, SectionKey, Properties>> for SectionEntry<'a> {
+    fn from(e: Entry<'a, SectionKey, Properties>) -> SectionEntry<'a> {
+        match e {
+            Entry::Occupied(inner) => SectionEntry::Occupied(SectionOccupiedEntry { inner }),
+            Entry::Vacant(inner) => SectionEntry::Vacant(SectionVacantEntry { inner }),
+        }
+    }
+}
+
 /// Ini struct
 #[derive(Clone, Default)]
 pub struct Ini {
-    sections: Map<Option<String>, Properties>,
+    sections: ListOrderedMultimap<SectionKey, Properties>,
 }
 
 impl Ini {
@@ -457,19 +510,40 @@ impl Ini {
     pub fn section<S>(&self, name: Option<S>) -> Option<&Properties>
         where S: Into<String>
     {
-        self.sections.get(&name.map(Into::into))
+        self.sections.get(&section_key!(name))
     }
 
     /// Get a mutable section
     pub fn section_mut<S>(&mut self, name: Option<S>) -> Option<&mut Properties>
         where S: Into<String>
     {
-        self.sections.get_mut(&name.map(Into::into))
+        self.sections.get_mut(&section_key!(name))
+    }
+
+    /// Get all sections immutable with the same key
+    pub fn section_all<S>(&self, name: Option<S>) -> impl Iterator<Item = &Properties>
+        where S: Into<String>
+    {
+        self.sections.get_all(&section_key!(name))
+    }
+
+    /// Get all sections mutable with the same key
+    pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl Iterator<Item = &mut Properties>
+        where S: Into<String>
+    {
+        self.sections.get_all_mut(&section_key!(name))
     }
 
     /// Get the entry
-    pub fn entry(&mut self, name: Option<String>) -> Entry<Option<String>, Properties> {
-        self.sections.entry(name.map(|s| s))
+    #[cfg(not(feature = "case-insensitive"))]
+    pub fn entry(&mut self, name: Option<String>) -> SectionEntry<'_> {
+        SectionEntry::from(self.sections.entry(name.map(|s| s)))
+    }
+
+    /// Get the entry
+    #[cfg(feature = "case-insensitive")]
+    pub fn entry(&mut self, name: Option<String>) -> SectionEntry<'_> {
+        SectionEntry::from(self.sections.entry(name.map(UniCase::from)))
     }
 
     /// Clear all entries
@@ -478,8 +552,8 @@ impl Ini {
     }
 
     /// Iterate with sections
-    pub fn sections(&self) -> Keys<Option<String>, Properties> {
-        self.sections.keys()
+    pub fn sections(&self) -> impl Iterator<Item = Option<&str>> {
+        self.sections.keys().map(|s| s.as_ref().map(AsRef::as_ref))
     }
 
     /// Set key-value to a section
@@ -489,7 +563,7 @@ impl Ini {
         self.with_section(section).set(key, value);
     }
 
-    /// Get the value from a section with key
+    /// Get the first value from the sections with key
     ///
     /// Example:
     ///
@@ -502,16 +576,10 @@ impl Ini {
     pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
         where S: Into<String>
     {
-        match self.sections.get(&section.map(Into::into)) {
-            None => None,
-            Some(ref prop) => match prop.get(key) {
-                Some(p) => Some(&p[..]),
-                None => None,
-            },
-        }
+        self.sections.get(&section_key!(section)).and_then(|prop| prop.get(key))
     }
 
-    /// Get the value from a section with key, return the default value if it does not exist
+    /// Get the first value from the sections with key, return the default value if it does not exist
     ///
     /// Example:
     ///
@@ -524,55 +592,59 @@ impl Ini {
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
         where S: Into<String>
     {
-        match self.sections.get(&section.map(Into::into)) {
-            None => default,
-            Some(ref prop) => match prop.get(key) {
-                Some(p) => &p[..],
-                None => default,
-            },
-        }
+        self.get_from(section, key).unwrap_or(default)
     }
 
-    /// Get the mutable from a section with key
-    pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a str>
+    /// Get the first mutable value from the sections with key
+    pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a mut str>
         where S: Into<String>
     {
-        match self.sections.get_mut(&section.map(Into::into)) {
-            None => None,
-            Some(prop) => prop.get_mut(key).map(|s| &s[..]),
-        }
+        self.sections
+            .get_mut(&section_key!(section))
+            .and_then(|prop| prop.get_mut(key))
     }
 
-    /// Delete a section, return the properties if it exists
+    /// Delete the first section with key, return the properties if it exists
     pub fn delete<S>(&mut self, section: Option<S>) -> Option<Properties>
         where S: Into<String>
     {
-        self.sections.remove(&section.map(Into::into))
+        let key = section_key!(section);
+        self.sections.remove(&key)
     }
 
-    pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<Vec<String>>
+    pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
         where S: Into<String>
     {
         self.section_mut(section).and_then(|prop| prop.remove(key))
     }
+
+    /// Total sections count
+    pub fn len(&self) -> usize {
+        self.sections.keys_len()
+    }
+
+    /// Check if object coutains no section
+    pub fn is_empty(&self) -> bool {
+        self.sections.is_empty()
+    }
 }
 
-impl<'q> Index<&'q Option<String>> for Ini {
+impl<S: Into<String>> Index<Option<S>> for Ini {
     type Output = Properties;
 
-    fn index<'a>(&'a self, index: &'q Option<String>) -> &'a Properties {
-        match self.sections.get(index) {
+    fn index(&self, index: Option<S>) -> &Properties {
+        match self.section(index) {
             Some(p) => p,
-            None => panic!("Section `{:?}` does not exist", index),
+            None => panic!("Section does not exist"),
         }
     }
 }
 
-impl<'i> IndexMut<&'i Option<String>> for Ini {
-    fn index_mut<'a>(&'a mut self, index: &Option<String>) -> &'a mut Properties {
-        match self.sections.get_mut(index) {
+impl<S: Into<String>> IndexMut<Option<S>> for Ini {
+    fn index_mut(&mut self, index: Option<S>) -> &mut Properties {
+        match self.section_mut(index) {
             Some(p) => p,
-            None => panic!("Section `{:?}` does not exist", index),
+            None => panic!("Section does not exist"),
         }
     }
 }
@@ -581,7 +653,7 @@ impl<'q> Index<&'q str> for Ini {
     type Output = Properties;
 
     fn index<'a>(&'a self, index: &'q str) -> &'a Properties {
-        match self.sections.get(&Some(index.into())) {
+        match self.section(Some(index)) {
             Some(p) => p,
             None => panic!("Section `{}` does not exist", index),
         }
@@ -590,7 +662,7 @@ impl<'q> Index<&'q str> for Ini {
 
 impl<'q> IndexMut<&'q str> for Ini {
     fn index_mut<'a>(&'a mut self, index: &'q str) -> &'a mut Properties {
-        match self.sections.get_mut(&Some(index.into())) {
+        match self.section_mut(Some(index)) {
             Some(p) => p,
             None => panic!("Section `{}` does not exist", index),
         }
@@ -642,18 +714,20 @@ impl Ini {
                 let k_str = escape_str(&k[..], opt.escape_policy);
                 let v_str = escape_str(&v[..], opt.escape_policy);
                 write!(writer, "{}={}{}", k_str, v_str, opt.line_separator)?;
+
+                firstline = false;
             }
-            firstline = false;
         }
 
-        for (section, props) in self.sections.iter().filter(|&(ref s, _)| s.is_some()) {
-            if firstline {
-                firstline = false;
-            } else {
-                writer.write_all(opt.line_separator.as_str().as_bytes())?;
-            }
-
+        for (section, props) in &self.sections {
             if let Some(ref section) = *section {
+                if firstline {
+                    firstline = false;
+                } else {
+                    // Write an empty line between sections
+                    writer.write_all(opt.line_separator.as_str().as_bytes())?;
+                }
+
                 write!(writer,
                        "[{}]{}",
                        escape_str(&section[..], opt.escape_policy),
@@ -736,87 +810,65 @@ impl Ini {
     }
 }
 
-/// Iterator for sections
-pub struct SectionIterator<'a> {
-    mapiter: Iter<'a, Option<String>, Properties>,
+/// Iterator for traversing sections
+pub struct SectionIter<'a> {
+    inner: Iter<'a, SectionKey, Properties>,
 }
 
-/// Iterator for mutable sections
-pub struct SectionMutIterator<'a> {
-    mapiter: IterMut<'a, Option<String>, Properties>,
+impl<'a> Iterator for SectionIter<'a> {
+    type Item = (Option<&'a str>, &'a Properties);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
+    }
+}
+
+/// Iterator for traversing sections
+pub struct SectionIterMut<'a> {
+    inner: IterMut<'a, SectionKey, Properties>,
+}
+
+impl<'a> Iterator for SectionIterMut<'a> {
+    type Item = (Option<&'a str>, &'a mut Properties);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
+    }
 }
 
 impl<'a> Ini {
     /// Immutable iterate though sections
-    pub fn iter(&'a self) -> SectionIterator<'a> {
-        SectionIterator { mapiter: self.sections.iter() }
+    pub fn iter(&'a self) -> SectionIter<'a> {
+        SectionIter { inner: self.sections.iter() }
     }
 
     /// Mutable iterate though sections
     /// *Deprecated! Use `iter_mut` instead!*
-    pub fn mut_iter(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.iter_mut() }
+    pub fn mut_iter(&'a mut self) -> SectionIterMut<'a> {
+        self.iter_mut()
     }
 
     /// Mutable iterate though sections
-    pub fn iter_mut(&'a mut self) -> SectionMutIterator<'a> {
-        SectionMutIterator { mapiter: self.sections.iter_mut() }
-    }
-}
-
-impl<'a> Iterator for SectionIterator<'a> {
-    type Item = (&'a Option<String>, &'a Properties);
-
-    #[inline]
-    fn next(&mut self) -> Option<(&'a Option<String>, &'a Properties)> {
-        self.mapiter.next()
-    }
-}
-
-impl<'a> Iterator for SectionMutIterator<'a> {
-    type Item = (&'a Option<String>, &'a mut Properties);
-
-    #[inline]
-    fn next(&mut self) -> Option<(&'a Option<String>, &'a mut Properties)> {
-        self.mapiter.next()
+    pub fn iter_mut(&'a mut self) -> SectionIterMut<'a> {
+        SectionIterMut { inner: self.sections.iter_mut() }
     }
 }
 
 impl<'a> IntoIterator for &'a Ini {
-    type Item = (&'a Option<String>, &'a Properties);
-    type IntoIter = SectionIterator<'a>;
+    type Item = (Option<&'a str>, &'a Properties);
+    type IntoIter = SectionIter<'a>;
 
-    fn into_iter(self) -> SectionIterator<'a> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
 impl<'a> IntoIterator for &'a mut Ini {
-    type Item = (&'a Option<String>, &'a mut Properties);
-    type IntoIter = SectionMutIterator<'a>;
+    type Item = (Option<&'a str>, &'a mut Properties);
+    type IntoIter = SectionIterMut<'a>;
 
-    fn into_iter(self) -> SectionMutIterator<'a> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
-    }
-}
-
-pub struct SectionIntoIter {
-    iter: IntoIter<Option<String>, Properties>,
-}
-
-impl Iterator for SectionIntoIter {
-    type Item = (Option<String>, Properties);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-impl IntoIterator for Ini {
-    type Item = (Option<String>, Properties);
-    type IntoIter = SectionIntoIter;
-
-    fn into_iter(self) -> SectionIntoIter {
-        SectionIntoIter { iter: self.sections.into_iter() }
     }
 }
 
@@ -845,6 +897,7 @@ impl Display for ParseError {
 
 impl error::Error for ParseError {}
 
+/// Error while parsing an INI document
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
@@ -935,7 +988,7 @@ impl<'a> Parser<'a> {
         while let Some(cur_ch) = self.ch {
             match cur_ch {
                 ';' | '#' => {
-                    if cfg!(not(feature = "inline_comment")) {
+                    if cfg!(not(feature = "inline-comment")) {
                         // Inline comments is not supported, so comments must starts from a new line
                         //
                         // https://en.wikipedia.org/wiki/INI_file#Comments
@@ -950,7 +1003,14 @@ impl<'a> Parser<'a> {
                     Ok(sec) => {
                         let msec = sec[..].trim();
                         cursec = Some((*msec).to_string());
-                        result.sections.entry(cursec.clone()).or_insert_with(Default::default);
+                        match result.entry(cursec.clone()) {
+                            SectionEntry::Vacant(v) => {
+                                v.insert(Default::default());
+                            }
+                            SectionEntry::Occupied(mut o) => {
+                                o.append(Default::default());
+                            }
+                        }
                         self.bump();
                     }
                     Err(e) => return Err(e),
@@ -962,8 +1022,18 @@ impl<'a> Parser<'a> {
                     match self.parse_val() {
                         Ok(val) => {
                             let mval = val[..].trim().to_owned();
-                            let sec = result.sections.entry(cursec.clone()).or_insert_with(Default::default);
-                            sec.insert(curkey, mval);
+                            match result.entry(cursec.clone()) {
+                                SectionEntry::Vacant(v) => {
+                                    // cursec must be None (the General Section)
+                                    let mut prop = Properties::new();
+                                    prop.insert(curkey, mval);
+                                    v.insert(prop);
+                                }
+                                SectionEntry::Occupied(mut o) => {
+                                    // Insert into the last (current) section
+                                    o.last_mut().insert(curkey, mval);
+                                }
+                            }
                             curkey = "".into();
                         }
                         Err(e) => return Err(e),
@@ -1086,12 +1156,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[cfg(not(feature = "inline_comment"))]
+    #[cfg(not(feature = "inline-comment"))]
     fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('\n'), Some('\r'), None])
     }
 
-    #[cfg(feature = "inline_comment")]
+    #[cfg(feature = "inline-comment")]
     fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
     }
@@ -1104,27 +1174,25 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_property_get_vec() {
+    fn property_get_vec() {
         let mut props = Properties::new();
         props.insert("k1", "v1");
         props.insert("k1", "v2");
 
-        let mut res = props.get_vec("k1").unwrap();
-        res.sort();
+        let res = props.get_all("k1").collect::<Vec<&str>>();
         assert_eq!(res, vec!["v1", "v2"]);
 
-        let res = props.get_vec("k2");
-        assert_eq!(res, None);
+        let res = props.get_all("k2").collect::<Vec<&str>>();
+        assert!(res.is_empty());
     }
 
     #[test]
-    fn test_property_remove() {
+    fn property_remove() {
         let mut props = Properties::new();
         props.insert("k1", "v1");
         props.insert("k1", "v2");
 
-        let mut res = props.remove("k1").unwrap();
-        res.sort();
+        let res = props.remove_all("k1").collect::<Vec<String>>();
         assert_eq!(res, vec!["v1", "v2"]);
         assert!(!props.contains_key("k1"));
     }
@@ -1136,10 +1204,10 @@ mod test {
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 2);
-        assert!(output.sections.contains_key(&Some("sec1".into())));
+        assert_eq!(output.len(), 2);
+        assert!(output.section(Some("sec1")).is_some());
 
-        let sec1 = &output.sections[&Some("sec1".into())];
+        let sec1 = output.section(Some("sec1")).unwrap();
         assert_eq!(sec1.len(), 2);
         let key1: String = "key1".into();
         assert!(sec1.contains_key(&key1));
@@ -1159,15 +1227,15 @@ mod test {
     }
 
     #[test]
-    fn test_parse_comment() {
+    fn parse_comment() {
         let input = "; abcdefghijklmn\n";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
     }
 
-    #[cfg(not(feature = "inline_comment"))]
+    #[cfg(not(feature = "inline-comment"))]
     #[test]
-    fn test_inline_comment_not_supported() {
+    fn inline_comment_not_supported() {
         let input = "
 [section name]
 name = hello # abcdefg
@@ -1179,8 +1247,8 @@ gender = mail ; abdddd
     }
 
     #[test]
-    #[cfg_attr(not(feature = "inline_comment"), should_panic)]
-    fn test_inline_comment() {
+    #[cfg_attr(not(feature = "inline-comment"), should_panic)]
+    fn inline_comment() {
         let input = "
 [section name] # comment in section line
 name = hello # abcdefg
@@ -1192,7 +1260,7 @@ gender = mail ; abdddd
     }
 
     #[test]
-    fn test_sharp_comment() {
+    fn sharp_comment() {
         let input = "
 [section name]
 name = hello
@@ -1203,7 +1271,7 @@ name = hello
     }
 
     #[test]
-    fn test_iter() {
+    fn iter() {
         let input = "
 [section name]
 name = hello # abcdefg
@@ -1213,11 +1281,11 @@ gender = mail ; abdddd
 
         for _ in &mut ini {}
         for _ in &ini {}
-        for _ in ini {}
+        // for _ in ini {}
     }
 
     #[test]
-    fn test_colon() {
+    fn colon() {
         let input = "
 [section name]
 name: hello
@@ -1229,7 +1297,7 @@ gender : mail
     }
 
     #[test]
-    fn test_string() {
+    fn string() {
         let input = "
 [section name]
 # This is a comment
@@ -1240,7 +1308,7 @@ Key = \"Value\"
     }
 
     #[test]
-    fn test_string_multiline() {
+    fn string_multiline() {
         let input = "
 [section name]
 # This is a comment
@@ -1252,7 +1320,7 @@ Otherline\"
     }
 
     #[test]
-    fn test_string_comment() {
+    fn string_comment() {
         let input = "
 [section name]
 # This is a comment
@@ -1265,7 +1333,7 @@ Stuff = Other
     }
 
     #[test]
-    fn test_string_single() {
+    fn string_single() {
         let input = "
 [section name]
 # This is a comment
@@ -1277,7 +1345,7 @@ Stuff = Other
     }
 
     #[test]
-    fn test_string_includes_quote() {
+    fn string_includes_quote() {
         let input = "
 [Test]
 Comment[tr]=İnternet'e erişin
@@ -1288,7 +1356,7 @@ Comment[uk]=Доступ до Інтернету
     }
 
     #[test]
-    fn test_string_single_multiline() {
+    fn string_single_multiline() {
         let input = "
 [section name]
 # This is a comment
@@ -1301,7 +1369,7 @@ Stuff = Other
     }
 
     #[test]
-    fn test_string_single_comment() {
+    fn string_single_comment() {
         let input = "
 [section name]
 # This is a comment
@@ -1319,10 +1387,10 @@ Key = 'Value   # This is not a comment ; at all'
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 1);
-        assert!(output.sections.contains_key(&None::<String>));
+        assert_eq!(output.len(), 1);
+        assert!(output.section(None::<String>).is_some());
 
-        let sec1 = &output.sections[&None::<String>];
+        let sec1 = output.section(None::<String>).unwrap();
         assert_eq!(sec1.len(), 2);
         let key1: String = "key1".into();
         assert!(sec1.contains_key(&key1));
@@ -1341,9 +1409,9 @@ Key = 'Value   # This is not a comment ; at all'
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 1);
-        assert!(output.sections.contains_key(&None::<String>));
-        let sec1 = &output.sections[&None::<String>];
+        assert_eq!(output.len(), 1);
+        assert!(output.section(None::<String>).is_some());
+        let sec1 = output.section(None::<String>).unwrap();
         assert_eq!(sec1.len(), 2);
         let key1: String = "key1".into();
         assert!(sec1.contains_key(&key1));
@@ -1362,9 +1430,9 @@ Key = 'Value   # This is not a comment ; at all'
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 1);
-        assert!(output.sections.contains_key(&None::<String>));
-        let sec1 = &output.sections[&None::<String>];
+        assert_eq!(output.len(), 1);
+        assert!(output.section(None::<String>).is_some());
+        let sec1 = output.section(None::<String>).unwrap();
         assert_eq!(sec1.len(), 2);
         let key1: String = "key1".into();
         assert!(sec1.contains_key(&key1));
@@ -1381,7 +1449,7 @@ Key = 'Value   # This is not a comment ; at all'
         let input = "key1=val1\nkey2=val2\n";
         let opt = Ini::load_from_str(input).unwrap();
 
-        let sec1 = &opt.sections[&None::<String>];
+        let sec1 = opt.section(None::<String>).unwrap();
 
         let key = "key1".to_owned();
         sec1.get(&key).unwrap();
@@ -1394,11 +1462,11 @@ Key = 'Value   # This is not a comment ; at all'
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.sections.len(), 1);
-        let sec = &output.sections[&None::<String>];
+        assert_eq!(output.len(), 1);
+        let sec = output.section(None::<String>).unwrap();
         assert_eq!(sec.len(), 1);
         assert!(sec.contains_key("path"));
-        assert_eq!(sec["path"], "C:\\Windows\\Some\\Folder\\");
+        assert_eq!(&sec["path"], "C:\\Windows\\Some\\Folder\\");
     }
 
     #[test]
@@ -1410,8 +1478,8 @@ B=b";
 
         let opt = Ini::load_from_str(input).unwrap();
         let sec = opt.section(Some("Section")).unwrap();
-        assert_eq!(sec["A"], "quote arg0");
-        assert_eq!(sec["B"], "b");
+        assert_eq!(&sec["A"], "quote arg0");
+        assert_eq!(&sec["B"], "b");
     }
 
     #[test]
@@ -1423,8 +1491,8 @@ B=b";
 
         let opt = Ini::load_from_str(input).unwrap();
         let sec = opt.section(Some("Section")).unwrap();
-        assert_eq!(sec["A"], "quote arg0");
-        assert_eq!(sec["B"], "b");
+        assert_eq!(&sec["A"], "quote arg0");
+        assert_eq!(&sec["B"], "b");
     }
 
     #[test]
@@ -1438,17 +1506,25 @@ Exec = \"/path/to/exe with space\" arg
                                          ParseOption { enabled_quote: false,
                                                        ..ParseOption::default() }).unwrap();
         let sec = opt.section(Some("Desktop Entry")).unwrap();
-        assert_eq!(sec["Exec"], "\"/path/to/exe with space\" arg");
+        assert_eq!(&sec["Exec"], "\"/path/to/exe with space\" arg");
     }
-}
-
-#[cfg(test)]
-#[cfg(feature = "preserve_order")]
-mod preserve_order {
-    use super::*;
 
     #[test]
-    fn test_preserve_order_section() {
+    #[cfg(feature = "case-insensitive")]
+    fn case_insensitive() {
+        let input = "
+[SecTION]
+KeY=value
+";
+
+        let ini = Ini::load_from_str(input).unwrap();
+        let section = ini.section(Some("section")).unwrap();
+        let val = section.get("key").unwrap();
+        assert_eq!("value", val);
+    }
+
+    #[test]
+    fn preserve_order_section() {
         let input = r"
 none2 = n2
 [SB]
@@ -1462,7 +1538,7 @@ xd = x
         ";
 
         let data = Ini::load_from_str(input).unwrap();
-        let keys: Vec<Option<&str>> = data.iter().map(|(k, _)| k.as_ref().map(|s| s.as_ref())).collect();
+        let keys: Vec<Option<&str>> = data.iter().map(|(k, _)| k).collect();
 
         assert_eq!(keys.len(), 5);
         assert_eq!(keys[0], None);
@@ -1473,7 +1549,7 @@ xd = x
     }
 
     #[test]
-    fn test_preserve_order_property() {
+    fn preserve_order_property() {
         let input = r"
 x2 = n2
 x1 = n2
@@ -1481,12 +1557,12 @@ x3 = n2
 ";
         let data = Ini::load_from_str(input).unwrap();
         let section = data.general_section();
-        let keys: Vec<&str> = section.iter().map(|(k, _)| k.as_ref()).collect();
+        let keys: Vec<&str> = section.iter().map(|(k, _)| k).collect();
         assert_eq!(keys, vec!["x2", "x1", "x3"]);
     }
 
     #[test]
-    fn test_preserve_order_property_in_section() {
+    fn preserve_order_property_in_section() {
         let input = r"
 [s]
 x2 = n2
@@ -1495,12 +1571,12 @@ a3 = n3
 ";
         let data = Ini::load_from_str(input).unwrap();
         let section = data.section(Some("s")).unwrap();
-        let keys: Vec<&str> = section.iter().map(|(k, _)| k.as_ref()).collect();
+        let keys: Vec<&str> = section.iter().map(|(k, _)| k).collect();
         assert_eq!(keys, vec!["x2", "xb", "a3"])
     }
 
     #[test]
-    fn test_preserve_order_write() {
+    fn preserve_order_write() {
         let input = r"
 x2 = n2
 x1 = n2
@@ -1516,11 +1592,11 @@ a3 = n3
         let new_data = Ini::load_from_str(&String::from_utf8(buf).unwrap()).unwrap();
 
         let sec0 = new_data.general_section();
-        let keys0: Vec<&str> = sec0.iter().map(|(k, _)| k.as_ref()).collect();
+        let keys0: Vec<&str> = sec0.iter().map(|(k, _)| k).collect();
         assert_eq!(keys0, vec!["x2", "x1", "x3"]);
 
         let sec1 = new_data.section(Some("s")).unwrap();
-        let keys1: Vec<&str> = sec1.iter().map(|(k, _)| k.as_ref()).collect();
+        let keys1: Vec<&str> = sec1.iter().map(|(k, _)| k).collect();
         assert_eq!(keys1, vec!["x2", "xb", "a3"]);
     }
 
@@ -1573,5 +1649,41 @@ a3 = n3
                            str::from_utf8(&buf).unwrap());
             }
         }
+    }
+
+    #[test]
+    fn duplicate_sections() {
+        // https://github.com/zonyitoo/rust-ini/issues/49
+
+        let input = r"
+[Peer]
+foo = a
+bar = b
+
+[Peer]
+foo = c
+bar = d
+
+[Peer]
+foo = e
+bar = f
+";
+
+        let ini = Ini::load_from_str(input).unwrap();
+        assert_eq!(3, ini.section_all(Some("Peer")).count());
+
+        let mut iter = ini.iter();
+        let (k1, p1) = iter.next().unwrap();
+        assert_eq!(Some("Peer"), k1);
+        assert_eq!(Some("a"), p1.get("foo"));
+        assert_eq!(Some("b"), p1.get("bar"));
+        let (k2, p2) = iter.next().unwrap();
+        assert_eq!(Some("Peer"), k2);
+        assert_eq!(Some("c"), p2.get("foo"));
+        assert_eq!(Some("d"), p2.get("bar"));
+        let (k3, p3) = iter.next().unwrap();
+        assert_eq!(Some("Peer"), k3);
+        assert_eq!(Some("e"), p3.get("foo"));
+        assert_eq!(Some("f"), p3.get("bar"));
     }
 }

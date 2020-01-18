@@ -25,19 +25,19 @@
 //! use ini::Ini;
 //!
 //! let mut conf = Ini::new();
-//! conf.with_section(Some("User".to_owned()))
+//! conf.with_section(Some("User"))
 //!     .set("name", "Raspberry树莓")
 //!     .set("value", "Pi");
-//! conf.with_section(Some("Library".to_owned()))
+//! conf.with_section(Some("Library"))
 //!     .set("name", "Sun Yat-sen U")
 //!     .set("location", "Guangzhou=world");
 //! conf.write_to_file("conf.ini").unwrap();
 //!
 //! let i = Ini::load_from_file("conf.ini").unwrap();
 //! for (sec, prop) in i.iter() {
-//!     println!("Section: {:?}", *sec);
+//!     println!("Section: {:?}", sec);
 //!     for (k, v) in prop.iter() {
-//!         println!("{}:{}", *k, *v);
+//!         println!("{}:{}", k, v);
 //!     }
 //! }
 //! ```
