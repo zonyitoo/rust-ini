@@ -290,7 +290,7 @@ impl<'a> SectionSetter<'a> {
         SectionSetter { ini, section_name }
     }
 
-    /// Set key-value pair in this section (all with the same name)
+    /// Set (replace) key-value pair in this section (all with the same name)
     pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
         where K: Into<String>,
               V: Into<String>
@@ -358,15 +358,15 @@ impl Properties {
         where K: Into<String>,
               V: Into<String>
     {
-        self.data.append(property_insert_key!(k.into()), v.into());
+        self.data.insert(property_insert_key!(k.into()), v.into());
     }
 
-    /// Replace key with (key, value) pair
-    pub fn replace<K, V>(&mut self, k: K, v: V)
+    /// Append key with (key, value) pair
+    pub fn append<K, V>(&mut self, k: K, v: V)
         where K: Into<String>,
               V: Into<String>
     {
-        self.data.insert(property_insert_key!(k.into()), v.into());
+        self.data.append(property_insert_key!(k.into()), v.into());
     }
 
     /// Get the first value associate with the key
@@ -1031,7 +1031,7 @@ impl<'a> Parser<'a> {
                                 }
                                 SectionEntry::Occupied(mut o) => {
                                     // Insert into the last (current) section
-                                    o.last_mut().insert(curkey, mval);
+                                    o.last_mut().append(curkey, mval);
                                 }
                             }
                             curkey = "".into();
@@ -1176,8 +1176,8 @@ mod test {
     #[test]
     fn property_get_vec() {
         let mut props = Properties::new();
-        props.insert("k1", "v1");
-        props.insert("k1", "v2");
+        props.append("k1", "v1");
+        props.append("k1", "v2");
 
         let res = props.get_all("k1").collect::<Vec<&str>>();
         assert_eq!(res, vec!["v1", "v2"]);
@@ -1189,8 +1189,8 @@ mod test {
     #[test]
     fn property_remove() {
         let mut props = Properties::new();
-        props.insert("k1", "v1");
-        props.insert("k1", "v2");
+        props.append("k1", "v1");
+        props.append("k1", "v2");
 
         let res = props.remove_all("k1").collect::<Vec<String>>();
         assert_eq!(res, vec!["v1", "v2"]);
@@ -1685,5 +1685,28 @@ bar = f
         assert_eq!(Some("Peer"), k3);
         assert_eq!(Some("e"), p3.get("foo"));
         assert_eq!(Some("f"), p3.get("bar"));
+    }
+
+    #[test]
+    fn fix_issue63() {
+        let section = "PHP";
+        let key = "engine";
+        let value = "On";
+        let new_value = "Off";
+
+        // create a new configuration
+        let mut conf = Ini::new();
+        conf.with_section(Some(section)).set(key, value);
+
+        // assert the value is the one expected
+        let v = conf.get_from(Some(section), key).unwrap();
+        assert_eq!(v, value);
+
+        // update the section/key with a new value
+        conf.set_to(Some(section), key.to_string(), new_value.to_string());
+
+        // assert the new value was set
+        let v = conf.get_from(Some(section), key).unwrap();
+        assert_eq!(v, new_value);
     }
 }
