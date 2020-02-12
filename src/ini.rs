@@ -1174,10 +1174,31 @@ mod test {
     use super::*;
 
     #[test]
+    fn property_replace() {
+        let mut props = Properties::new();
+        props.insert("k1", "v1");
+
+        assert_eq!(Some("v1"), props.get("k1"));
+        let res = props.get_all("k1").collect::<Vec<&str>>();
+        assert_eq!(res, vec!["v1"]);
+
+        props.insert("k1", "v2");
+        assert_eq!(Some("v2"), props.get("k1"));
+
+        let res = props.get_all("k1").collect::<Vec<&str>>();
+        assert_eq!(res, vec!["v2"]);
+    }
+
+    #[test]
     fn property_get_vec() {
         let mut props = Properties::new();
         props.append("k1", "v1");
+
+        assert_eq!(Some("v1"), props.get("k1"));
+
         props.append("k1", "v2");
+
+        assert_eq!(Some("v1"), props.get("k1"));
 
         let res = props.get_all("k1").collect::<Vec<&str>>();
         assert_eq!(res, vec!["v1", "v2"]);
@@ -1685,6 +1706,8 @@ bar = f
         assert_eq!(Some("Peer"), k3);
         assert_eq!(Some("e"), p3.get("foo"));
         assert_eq!(Some("f"), p3.get("bar"));
+
+        assert_eq!(None, iter.next());
     }
 
     #[test]
