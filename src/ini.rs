@@ -83,7 +83,9 @@ impl EscapePolicy {
     /// per this policy or false if not.
     pub fn should_escape(self, c: char) -> bool {
         match c {
-            '\\' | '\x00'..='\x1f' | '\x7f'..='\u{00ff}' => self.escape_basics(),
+            // A single backslash, must be escaped
+            // ASCII control characters, U+0000 NUL..= U+001F UNIT SEPARATOR, or U+007F DELETE. The same as char::is_ascii_control()
+            '\\' | '\x00'..='\x1f' | '\x7f' => self.escape_basics(),
             ';' | '#' | '=' | ':' => self.escape_reserved(),
             '\u{0080}'..='\u{FFFF}' => self.escape_unicode(),
             _ => false,
@@ -213,6 +215,7 @@ impl LineSeparator {
 }
 
 /// Writing configuration
+#[derive(Debug, Clone)]
 pub struct WriteOption {
     /// Policies about how to escape characters
     pub escape_policy: EscapePolicy,
@@ -1731,5 +1734,17 @@ bar = f
         // assert the new value was set
         let v = conf.get_from(Some(section), key).unwrap();
         assert_eq!(v, new_value);
+    }
+
+    #[test]
+    fn fix_issue64() {
+        let input = format!("some-key=åäö{}", super::DEFAULT_LINE_SEPARATOR);
+
+        let conf = Ini::load_from_str(&input).unwrap();
+
+        let mut output = Vec::new();
+        conf.write_to_policy(&mut output, EscapePolicy::Basics).unwrap();
+
+        assert_eq!(input, String::from_utf8(output).unwrap());
     }
 }
