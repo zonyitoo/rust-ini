@@ -382,7 +382,7 @@ impl Properties {
         self.data.get_all(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
-    /// Remove the property wiht the first value of the key
+    /// Remove the property with the first value of the key
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<String> {
         self.data.remove(property_get_key!(s.as_ref()))
     }
