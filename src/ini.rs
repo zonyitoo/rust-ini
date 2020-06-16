@@ -497,6 +497,11 @@ impl Ini {
         SectionSetter::new(self, section.map(Into::into))
     }
 
+    /// Set with general section, a simple wrapper of `with_section(None::<String>)`
+    pub fn with_general_section(&mut self) -> SectionSetter {
+        self.with_section(None::<String>)
+    }
+
     /// Get the immmutable general section
     pub fn general_section(&self) -> &Properties {
         self.section(None::<String>)
