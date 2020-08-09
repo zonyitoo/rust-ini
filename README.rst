@@ -79,7 +79,7 @@ Then you will get ``conf.ini``
         // iterating
         for (sec, prop) in &conf {
             println!("Section: {:?}", sec);
-            for (key, value) in prop {
+            for (key, value) in prop.iter() {
                 println!("{:?}:{:?}", key, value);
             }
         }
