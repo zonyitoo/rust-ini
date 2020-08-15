@@ -35,7 +35,7 @@ Usage
 
     fn main() {
         let mut conf = Ini::new();
-        conf.with_section(None)
+        conf.with_section(None::<String>)
             .set("encoding", "utf-8");
         conf.with_section(Some("User"))
             .set("given_name", "Tommy")
