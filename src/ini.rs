@@ -619,7 +619,8 @@ impl Ini {
         let key = section_key!(section);
         self.sections.remove(&key)
     }
-
+    
+    /// Delete the key from the section, return the value if key exists or None
     pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
         where S: Into<String>
     {
