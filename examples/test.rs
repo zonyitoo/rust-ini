@@ -1,5 +1,3 @@
-extern crate ini;
-
 use std::io::stdout;
 
 use ini::Ini;
