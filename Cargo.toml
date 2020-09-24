@@ -16,7 +16,7 @@ test = true
 [dependencies]
 cfg-if = "0.1"
 unicase = { version = "2.6", optional = true }
-ordered-multimap = "0.2"
+ordered-multimap = "0.3"
 
 [features]
 default = []
