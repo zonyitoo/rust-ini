@@ -640,7 +640,7 @@ impl Ini {
         let key = section_key!(section);
         self.sections.remove(&key)
     }
-    
+
     /// Delete the key from the section, return the value if key exists or None
     pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
         where S: Into<String>
@@ -1133,7 +1133,12 @@ impl<'a> Parser<'a> {
                             }
                             let r = u32::from_str_radix(&code[..], 16);
                             match r {
-                                Ok(c) => result.push(char::from_u32(c).unwrap()),
+                                Ok(c) => match char::from_u32(c) {
+                                    Some(c) => result.push(c),
+                                    None => {
+                                        return self.error("unknown character in \\xHH form");
+                                    }
+                                },
                                 Err(_) => return self.error("unknown character in \\xHH form"),
                             }
                         }
@@ -1773,5 +1778,16 @@ bar = f
         conf.write_to_policy(&mut output, EscapePolicy::Basics).unwrap();
 
         assert_eq!(input, String::from_utf8(output).unwrap());
+    }
+
+    #[test]
+    fn invalid_codepoint() {
+        use std::io::Cursor;
+
+        let d = vec![10, 8, 68, 8, 61, 10, 126, 126, 61, 49, 10, 62, 8, 8, 61, 10, 91, 93, 93, 36, 91, 61, 10, 75, 91,
+                     10, 10, 10, 61, 92, 120, 68, 70, 70, 70, 70, 70, 126, 61, 10, 0, 0, 61, 10, 38, 46, 49, 61, 0,
+                     39, 0, 0, 46, 92, 120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0];
+        let mut file = Cursor::new(d);
+        assert!(Ini::read_from(&mut file).is_err());
     }
 }
