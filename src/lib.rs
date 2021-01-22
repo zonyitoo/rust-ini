@@ -47,6 +47,7 @@ use std::error;
 use std::fmt::{self, Display};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
+use std::io::{Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::Chars;
@@ -836,6 +837,23 @@ impl Ini {
             }
             Ok(r) => r,
         };
+
+        let mut with_bom = false;
+
+        // Check if file starts with a BOM marker
+        // UTF-8: EF BB BF
+        let mut bom = [0u8; 3];
+        if let Ok(..) = reader.read_exact(&mut bom) {
+            if &bom == b"\xEF\xBB\xBF" {
+                with_bom = true;
+            }
+        }
+
+        if !with_bom {
+            // Reset file pointer
+            reader.seek(SeekFrom::Start(0))?;
+        }
+
         Ini::read_from_opt(&mut reader, opt)
     }
 }
@@ -949,6 +967,12 @@ impl error::Error for Error {
             Error::Io(ref err) => err.source(),
             Error::Parse(ref err) => err.source(),
         }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::Io(err)
     }
 }
 
@@ -1206,6 +1230,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
+    use std::env::temp_dir;
+
     use super::*;
 
     #[test]
@@ -1498,6 +1524,21 @@ Key = 'Value   # This is not a comment ; at all'
         assert_eq!(sec1[&key1], val1);
         let val2: String = "val2".into();
         assert_eq!(sec1[&key2], val2);
+    }
+
+    #[test]
+    fn load_from_file_with_bom() {
+        let file_name = temp_dir().join("rust_ini_load_from_file_with_bom");
+
+        let file_content = b"\xEF\xBB\xBF[Test]Key=Value\n";
+
+        {
+            let mut file = File::create(&file_name).expect("create");
+            file.write_all(file_content).expect("write");
+        }
+
+        let ini = Ini::load_from_file(&file_name).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value"));
     }
 
     #[test]
