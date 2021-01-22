@@ -1542,6 +1542,21 @@ Key = 'Value   # This is not a comment ; at all'
     }
 
     #[test]
+    fn load_from_file_without_bom() {
+        let file_name = temp_dir().join("rust_ini_load_from_file_without_bom");
+
+        let file_content = b"[Test]Key=Value\n";
+
+        {
+            let mut file = File::create(&file_name).expect("create");
+            file.write_all(file_content).expect("write");
+        }
+
+        let ini = Ini::load_from_file(&file_name).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value"));
+    }
+
+    #[test]
     fn get_with_non_static_key() {
         let input = "key1=val1\nkey2=val2\n";
         let opt = Ini::load_from_str(input).unwrap();
