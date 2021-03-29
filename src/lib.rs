@@ -869,6 +869,10 @@ impl<'a> Iterator for SectionIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 impl DoubleEndedIterator for SectionIter<'_> {
@@ -887,6 +891,10 @@ impl<'a> Iterator for SectionIterMut<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
     }
 }
 
