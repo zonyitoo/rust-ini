@@ -891,7 +891,7 @@ impl<'a> Ini {
     }
 
     /// Mutable iterate though sections
-    /// *Deprecated! Use `iter_mut` instead!*
+    #[deprecated(note = "Use `iter_mut` instead!")]
     pub fn mut_iter(&'a mut self) -> SectionIterMut<'a> {
         self.iter_mut()
     }
