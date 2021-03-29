@@ -369,7 +369,7 @@ impl Properties {
     }
 
     /// Get an iterator of the properties
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&str, &str)> {
         self.data.iter().map(|(k, v)| (k.as_ref(), v.as_str()))
     }
 
@@ -400,7 +400,7 @@ impl Properties {
     }
 
     /// Get all values associate with the key
-    pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl Iterator<Item = &str> {
+    pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl DoubleEndedIterator<Item = &str> {
         self.data.get_all(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
@@ -410,7 +410,7 @@ impl Properties {
     }
 
     /// Remove the property with all values with the same key
-    pub fn remove_all<'a, S: AsRef<str>>(&'a mut self, s: S) -> impl Iterator<Item = String> + 'a {
+    pub fn remove_all<'a, S: AsRef<str>>(&'a mut self, s: S) -> impl DoubleEndedIterator<Item = String> + 'a {
         self.data.remove_all(property_get_key!(s.as_ref()))
     }
 
@@ -551,14 +551,14 @@ impl Ini {
     }
 
     /// Get all sections immutable with the same key
-    pub fn section_all<S>(&self, name: Option<S>) -> impl Iterator<Item = &Properties>
+    pub fn section_all<S>(&self, name: Option<S>) -> impl DoubleEndedIterator<Item = &Properties>
         where S: Into<String>
     {
         self.sections.get_all(&section_key!(name))
     }
 
     /// Get all sections mutable with the same key
-    pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl Iterator<Item = &mut Properties>
+    pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl DoubleEndedIterator<Item = &mut Properties>
         where S: Into<String>
     {
         self.sections.get_all_mut(&section_key!(name))
@@ -582,7 +582,7 @@ impl Ini {
     }
 
     /// Iterate with sections
-    pub fn sections(&self) -> impl Iterator<Item = Option<&str>> {
+    pub fn sections(&self) -> impl DoubleEndedIterator<Item = Option<&str>> {
         self.sections.keys().map(|s| s.as_ref().map(AsRef::as_ref))
     }
 
@@ -871,6 +871,12 @@ impl<'a> Iterator for SectionIter<'a> {
     }
 }
 
+impl DoubleEndedIterator for SectionIter<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
+    }
+}
+
 /// Iterator for traversing sections
 pub struct SectionIterMut<'a> {
     inner: IterMut<'a, SectionKey, Properties>,
@@ -881,6 +887,12 @@ impl<'a> Iterator for SectionIterMut<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
+    }
+}
+
+impl DoubleEndedIterator for SectionIterMut<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(k, v)| (k.as_ref().map(|s| s.as_str()), v))
     }
 }
 
