@@ -31,3 +31,10 @@ default = []
 inline-comment = []
 # Case-insensitive Sections and Property Keys
 case-insensitive = ["unicase"]
+# Allowing brackets in sections names
+#
+# For example:
+#
+# [[A]]
+# Key=value
+brackets-in-section-names = []

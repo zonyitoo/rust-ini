@@ -1199,9 +1199,24 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_section(&mut self) -> Result<String, ParseError> {
-        // Skip [
-        self.bump();
-        self.parse_str_until(&[Some(']')])
+        cfg_if! {
+            if #[cfg(feature = "brackets-in-section-names")] {
+                // Skip [
+                self.bump();
+                let result = self.parse_str_until(&[Some('\r'), Some('\n')]);
+                if result.is_err() {
+                    return result;
+                }
+                let s = result.unwrap();
+                let cut= s.chars().rev().take_while(|c| *c != ']').count();
+                let len = s.len() - cut - 1;
+                Ok(String::from(&s[0..len]))
+            } else {
+                // Skip [
+                self.bump();
+                self.parse_str_until(&[Some(']')])
+            }
+        }
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
@@ -1322,8 +1337,17 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "brackets-in-section-names"))]
     fn load_from_str_without_ending_newline() {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn load_from_str_without_ending_newline() {
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]\nfoo=bar";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
     }
@@ -1547,6 +1571,7 @@ Key = 'Value   # This is not a comment ; at all'
     }
 
     #[test]
+    #[cfg(not(feature = "brackets-in-section-names"))]
     fn load_from_file_with_bom() {
         let file_name = temp_dir().join("rust_ini_load_from_file_with_bom");
 
@@ -1562,10 +1587,43 @@ Key = 'Value   # This is not a comment ; at all'
     }
 
     #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn load_from_file_with_bom() {
+        let file_name = temp_dir().join("rust_ini_load_from_file_with_bom");
+
+        let file_content = b"\xEF\xBB\xBF[Test]\nKey=Value\n";
+
+        {
+            let mut file = File::create(&file_name).expect("create");
+            file.write_all(file_content).expect("write");
+        }
+
+        let ini = Ini::load_from_file(&file_name).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value"));
+    }
+
+    #[test]
+    #[cfg(not(feature = "brackets-in-section-names"))]
     fn load_from_file_without_bom() {
         let file_name = temp_dir().join("rust_ini_load_from_file_without_bom");
 
         let file_content = b"[Test]Key=Value\n";
+
+        {
+            let mut file = File::create(&file_name).expect("create");
+            file.write_all(file_content).expect("write");
+        }
+
+        let ini = Ini::load_from_file(&file_name).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value"));
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn load_from_file_without_bom() {
+        let file_name = temp_dir().join("rust_ini_load_from_file_without_bom");
+
+        let file_content = b"[Test]\nKey=Value\n";
 
         {
             let mut file = File::create(&file_name).expect("create");
@@ -1865,5 +1923,50 @@ bar = f
                      39, 0, 0, 46, 92, 120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0];
         let mut file = Cursor::new(d);
         assert!(Ini::read_from(&mut file).is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn fix_issue84() {
+        let input = "
+[[*]]
+a = b
+c = d
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        let sect = ini.section(Some("[*]"));
+        assert!(sect.is_some());
+        assert!(sect.unwrap().contains_key("a"));
+        assert!(sect.unwrap().contains_key("c"));
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn fix_issue84_brackets_inside() {
+        let input = "
+[a[b]c]
+a = b
+c = d
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        let sect = ini.section(Some("a[b]c"));
+        assert!(sect.is_some());
+        assert!(sect.unwrap().contains_key("a"));
+        assert!(sect.unwrap().contains_key("c"));
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn fix_issue84_whitespaces_after_bracket() {
+        let input = "
+[[*]]\t\t
+a = b
+c = d
+";
+        let ini = Ini::load_from_str(input).unwrap();
+        let sect = ini.section(Some("[*]"));
+        assert!(sect.is_some());
+        assert!(sect.unwrap().contains_key("a"));
+        assert!(sect.unwrap().contains_key("c"));
     }
 }
