@@ -1237,7 +1237,7 @@ impl<'a> Parser<'a> {
                 if cut > 0 {
                     let all_acceptable = s[len+1..].chars().all(|c| c == ' ' || c == '\t');
                     if !all_acceptable {
-                        return self.error("unknown character in section name");
+                        return self.error("not acceptable character after section end");
                     }
                 }
                 Ok(String::from(&s[0..len]))
