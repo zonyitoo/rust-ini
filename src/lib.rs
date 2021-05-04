@@ -1203,13 +1203,43 @@ impl<'a> Parser<'a> {
             if #[cfg(feature = "brackets-in-section-names")] {
                 // Skip [
                 self.bump();
-                let result = self.parse_str_until(&[Some('\r'), Some('\n')]);
+                let endpoint;
+                cfg_if! {
+                    if #[cfg(feature = "inline-comment")] {
+                        endpoint = &[Some('\r'), Some('\n'), Some('#'), Some(';')]
+                    } else {
+                        endpoint = &[Some('\r'), Some('\n')];
+                    }
+                }
+
+                let result = self.parse_str_until(endpoint);
                 if result.is_err() {
                     return result;
                 }
+
+                cfg_if! {
+                    if #[cfg(feature = "inline-comment")] {
+                        match self.ch {
+                            Some('#') | Some(';') => {
+                                let r = self.parse_str_until(&[Some('\r'), Some('\n')]);
+                                if r.is_err() {
+                                    return r;
+                                }
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+
                 let s = result.unwrap();
                 let cut= s.chars().rev().take_while(|c| *c != ']').count();
                 let len = s.len() - cut - 1;
+                if cut > 0 {
+                    let all_acceptable = s[len+1..].chars().all(|c| c == ' ' || c == '\t');
+                    if !all_acceptable {
+                        return self.error("unknown character in section name");
+                    }
+                }
                 Ok(String::from(&s[0..len]))
             } else {
                 // Skip [
@@ -1315,8 +1345,32 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "brackets-in-section-names"))]
     fn load_from_str_with_valid_input() {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let output = opt.unwrap();
+        assert_eq!(output.len(), 2);
+        assert!(output.section(Some("sec1")).is_some());
+
+        let sec1 = output.section(Some("sec1")).unwrap();
+        assert_eq!(sec1.len(), 2);
+        let key1: String = "key1".into();
+        assert!(sec1.contains_key(&key1));
+        let key2: String = "key2".into();
+        assert!(sec1.contains_key(&key2));
+        let val1: String = "val1".into();
+        assert_eq!(sec1[&key1], val1);
+        let val2: String = "377".into();
+        assert_eq!(sec1[&key2], val2);
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn load_from_str_with_valid_input() {
+        let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]\nfoo=bar\n";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
 
@@ -1968,5 +2022,17 @@ c = d
         assert!(sect.is_some());
         assert!(sect.unwrap().contains_key("a"));
         assert!(sect.unwrap().contains_key("c"));
+    }
+
+    #[test]
+    #[cfg(feature = "brackets-in-section-names")]
+    fn fix_issue84_not_whitespaces_after_bracket() {
+        let input = "
+[[*]]xx
+a = b
+c = d
+";
+        let ini = Ini::load_from_str(input);
+        assert!(ini.is_err());
     }
 }
