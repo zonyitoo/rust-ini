@@ -1345,6 +1345,18 @@ mod test {
     }
 
     #[test]
+    fn load_from_str_with_empty_input() {
+        let input = "\n\n\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let mut output = opt.unwrap();
+        assert!(output.general_section().is_empty());
+        assert!(output.general_section_mut().is_empty());
+        assert_eq!(output.len(), 1);
+    }
+
+    #[test]
     #[cfg(not(feature = "brackets-in-section-names"))]
     fn load_from_str_with_valid_input() {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]foo=bar\n";
@@ -1931,6 +1943,15 @@ bar = f
         assert_eq!(Some("f"), p3.get("bar"));
 
         assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn new_has_empty_general_section() {
+        let mut ini = Ini::new();
+
+        assert!(ini.general_section().is_empty());
+        assert!(ini.general_section_mut().is_empty());
+        assert_eq!(ini.len(), 1);
     }
 
     #[test]
