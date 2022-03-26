@@ -501,7 +501,7 @@ impl<'a> From<Entry<'a, SectionKey, Properties>> for SectionEntry<'a> {
 }
 
 /// Ini struct
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Ini {
     sections: ListOrderedMultimap<SectionKey, Properties>,
 }
@@ -657,6 +657,20 @@ impl Ini {
     /// Check if object coutains no section
     pub fn is_empty(&self) -> bool {
         self.sections.is_empty()
+    }
+}
+
+impl Default for Ini {
+    /// Creates an ini instance with an empty general section. This allows [Ini::general_section]
+    /// and [Ini::with_general_section] to be called without panicking.
+    fn default() -> Self {
+        let mut result = Ini {
+            sections: Default::default(),
+        };
+
+        result.sections.insert(None::<String>, Default::default());
+
+        result
     }
 }
 
@@ -1345,7 +1359,38 @@ mod test {
     }
 
     #[test]
+    fn load_from_str_with_empty_general_section() {
+        let input = "[sec1]\nkey1=val1\n";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let mut output = opt.unwrap();
+        assert_eq!(output.len(), 2);
+
+        assert!(output.general_section().is_empty());
+        assert!(output.general_section_mut().is_empty());
+
+        let props1 = output.section(None::<String>).unwrap();
+        assert!(props1.is_empty());
+        let props2 = output.section(Some("sec1")).unwrap();
+        assert_eq!(props2.len(), 1);
+        assert_eq!(props2.get("key1"), Some("val1"));
+    }
+
+    #[test]
     fn load_from_str_with_empty_input() {
+        let input = "";
+        let opt = Ini::load_from_str(input);
+        assert!(opt.is_ok());
+
+        let mut output = opt.unwrap();
+        assert!(output.general_section().is_empty());
+        assert!(output.general_section_mut().is_empty());
+        assert_eq!(output.len(), 1);
+    }
+
+    #[test]
+    fn load_from_str_with_empty_lines() {
         let input = "\n\n\n";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
@@ -1364,7 +1409,8 @@ mod test {
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.len(), 2);
+        // there is always a general section
+        assert_eq!(output.len(), 3);
         assert!(output.section(Some("sec1")).is_some());
 
         let sec1 = output.section(Some("sec1")).unwrap();
@@ -1857,6 +1903,22 @@ a3 = n3
     }
 
     #[test]
+    fn write_new() {
+        use std::str;
+
+        let ini = Ini::new();
+
+        let opt = WriteOption {
+            line_separator: LineSeparator::CR,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        ini.write_to_opt(&mut buf, opt).unwrap();
+
+        assert_eq!("", str::from_utf8(&buf).unwrap());
+    }
+
+    #[test]
     fn write_line_separator() {
         use std::str;
 
@@ -1929,6 +1991,10 @@ bar = f
         assert_eq!(3, ini.section_all(Some("Peer")).count());
 
         let mut iter = ini.iter();
+        // there is always an empty general section
+        let (k0, p0) = iter.next().unwrap();
+        assert_eq!(None, k0);
+        assert!(p0.is_empty());
         let (k1, p1) = iter.next().unwrap();
         assert_eq!(Some("Peer"), k1);
         assert_eq!(Some("a"), p1.get("foo"));
