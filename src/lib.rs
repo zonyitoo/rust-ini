@@ -524,7 +524,7 @@ impl Ini {
         self.with_section(None::<String>)
     }
 
-    /// Get the immmutable general section
+    /// Get the immutable general section
     pub fn general_section(&self) -> &Properties {
         self.section(None::<String>)
             .expect("There is no general section in this Ini")
