@@ -501,7 +501,7 @@ impl<'a> From<Entry<'a, SectionKey, Properties>> for SectionEntry<'a> {
 }
 
 /// Ini struct
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Ini {
     sections: ListOrderedMultimap<SectionKey, Properties>,
 }
@@ -654,7 +654,7 @@ impl Ini {
         self.sections.keys_len()
     }
 
-    /// Check if object coutains no section
+    /// Check if object contains no section
     pub fn is_empty(&self) -> bool {
         self.sections.is_empty()
     }
@@ -1431,7 +1431,8 @@ mod test {
         assert!(opt.is_ok());
 
         let output = opt.unwrap();
-        assert_eq!(output.len(), 2);
+        // there is always a general section
+        assert_eq!(output.len(), 3);
         assert!(output.section(Some("sec1")).is_some());
 
         let sec1 = output.section(Some("sec1")).unwrap();
@@ -1906,10 +1907,8 @@ a3 = n3
 
         let ini = Ini::new();
 
-        let opt = WriteOption {
-            line_separator: LineSeparator::CR,
-            ..Default::default()
-        };
+        let opt = WriteOption { line_separator: LineSeparator::CR,
+                                ..Default::default() };
         let mut buf = Vec::new();
         ini.write_to_opt(&mut buf, opt).unwrap();
 
