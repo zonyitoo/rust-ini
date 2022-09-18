@@ -664,11 +664,9 @@ impl Default for Ini {
     /// Creates an ini instance with an empty general section. This allows [Ini::general_section]
     /// and [Ini::with_general_section] to be called without panicking.
     fn default() -> Self {
-        let mut result = Ini {
-            sections: Default::default(),
-        };
+        let mut result = Ini { sections: Default::default() };
 
-        result.sections.insert(None::<String>, Default::default());
+        result.sections.insert(None, Default::default());
 
         result
     }
