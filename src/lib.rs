@@ -414,6 +414,14 @@ impl Properties {
         self.data.remove_all(property_get_key!(s.as_ref()))
     }
 
+    pub fn as_ini(&self, section_name: Option<&str>) -> Ini {
+        let mut ini_root = ListOrderedMultimap::<SectionKey, Properties>::default();
+        ini_root.append(section_key!(section_name), self.clone());
+        Ini {
+            sections: ini_root
+        }
+    }
+
     fn get_mut<S: AsRef<str>>(&mut self, s: S) -> Option<&mut str> {
         self.data.get_mut(property_get_key!(s.as_ref())).map(|v| v.as_mut_str())
     }
@@ -1964,6 +1972,28 @@ a3 = n3
                            str::from_utf8(&buf).unwrap());
             }
         }
+    }
+
+    #[test]
+    fn ini_subset() {
+        let input = r"
+[foo]
+f1=f1
+
+[bar]
+b1=b1
+";
+        let data = Ini::load_from_str(input).unwrap(); 
+        let foo_section = data.section(Some("foo")).unwrap();
+        let ini_subset = foo_section.as_ini(Some("foo"));
+        
+        let mut buf = vec![];
+        ini_subset.write_to(&mut buf).unwrap();
+
+        assert_eq!(String::from_utf8(buf).unwrap(), r"[foo]
+f1=f1
+"
+        );
     }
 
     #[test]
