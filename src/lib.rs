@@ -219,6 +219,8 @@ static DEFAULT_LINE_SEPARATOR: &str = "\n";
 #[cfg(windows)]
 static DEFAULT_LINE_SEPARATOR: &str = "\r\n";
 
+static DEFAULT_KV_SEPARATOR: &str = "=";
+
 impl fmt::Display for LineSeparator {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(self.as_str())
@@ -244,12 +246,16 @@ pub struct WriteOption {
 
     /// Newline style
     pub line_separator: LineSeparator,
+
+    /// Key value separator
+    pub kv_separator: &'static str,
 }
 
 impl Default for WriteOption {
     fn default() -> WriteOption {
         WriteOption { escape_policy: EscapePolicy::Basics,
-                      line_separator: LineSeparator::SystemDefault }
+                      line_separator: LineSeparator::SystemDefault,
+                      kv_separator: DEFAULT_KV_SEPARATOR }
     }
 }
 
@@ -779,7 +785,7 @@ impl Ini {
                 for (k, v) in props.iter() {
                     let k_str = escape_str(&k[..], opt.escape_policy);
                     let v_str = escape_str(&v[..], opt.escape_policy);
-                    write!(writer, "{}={}{}", k_str, v_str, opt.line_separator)?;
+                    write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
                 }
             }
         }
@@ -1180,9 +1186,11 @@ impl<'a> Parser<'a> {
                                 } else if let Some('\\') = self.ch {
                                     self.bump();
                                     if self.ch != Some('\n') {
-                                        return self.error(format!("expecting \"\\\\n\" but \
-                                                                   found \"{:?}\".",
-                                                                  self.ch));
+                                        return self.error(format!(
+                                            "expecting \"\\\\n\" but \
+                                             found \"{:?}\".",
+                                            self.ch
+                                        ));
                                     }
                                 }
                                 code.push(self.ch.unwrap());
@@ -1967,6 +1975,28 @@ a3 = n3
     }
 
     #[test]
+    fn write_kv_separator() {
+        use std::str;
+
+        let mut ini = Ini::new();
+        ini.with_section(Some("Section1"))
+           .set("Key1", "Value")
+           .set("Key2", "Value");
+        ini.with_section(Some("Section2"))
+           .set("Key1", "Value")
+           .set("Key2", "Value");
+
+        let mut buf = Vec::new();
+        ini.write_to_opt(&mut buf,
+                         WriteOption { kv_separator: " = ",
+                                       ..Default::default() })
+           .unwrap();
+
+        assert_eq!("[Section1]\nKey1 = Value\nKey2 = Value\n\n[Section2]\nKey1 = Value\nKey2 = Value\n",
+                   str::from_utf8(&buf).unwrap());
+    }
+
+    #[test]
     fn duplicate_sections() {
         // https://github.com/zonyitoo/rust-ini/issues/49
 
@@ -2058,7 +2088,7 @@ bar = f
 
         let d = vec![10, 8, 68, 8, 61, 10, 126, 126, 61, 49, 10, 62, 8, 8, 61, 10, 91, 93, 93, 36, 91, 61, 10, 75, 91,
                      10, 10, 10, 61, 92, 120, 68, 70, 70, 70, 70, 70, 126, 61, 10, 0, 0, 61, 10, 38, 46, 49, 61, 0,
-                     39, 0, 0, 46, 92, 120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0];
+                     39, 0, 0, 46, 92, 120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0,];
         let mut file = Cursor::new(d);
         assert!(Ini::read_from(&mut file).is_err());
     }
