@@ -1045,8 +1045,8 @@ impl<'a> Parser<'a> {
     }
 
     fn error<U, M: Into<String>>(&self, msg: M) -> Result<U, ParseError> {
-        Err(ParseError { line: self.line,
-                         col: self.col,
+        Err(ParseError { line: self.line + 1,
+                         col: self.col + 1,
                          msg: msg.into() })
     }
 
