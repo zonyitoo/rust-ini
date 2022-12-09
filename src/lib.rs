@@ -1472,6 +1472,23 @@ mod test {
     }
 
     #[test]
+    fn parse_error_numbers() {
+        let invalid_input = "\n\\x";
+        let ini = Ini::load_from_str_opt(
+            invalid_input,
+            ParseOption {
+                enabled_escape: true,
+                ..Default::default()
+            },
+        );
+        assert!(!ini.is_ok());
+
+        let err = ini.unwrap_err();
+        assert_eq!(err.line, 2);
+        assert_eq!(err.col, 3);
+    }
+
+    #[test]
     fn parse_comment() {
         let input = "; abcdefghijklmn\n";
         let opt = Ini::load_from_str(input);
