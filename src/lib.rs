@@ -1103,7 +1103,6 @@ impl<'a> Parser<'a> {
                                 o.append(Default::default());
                             }
                         }
-                        self.bump();
                     }
                     Err(e) => return Err(e),
                 },
@@ -1155,13 +1154,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_str_until(&mut self, endpoint: &[Option<char>]) -> Result<String, ParseError> {
+    fn parse_str_until(&mut self, endpoint: &[Option<char>], check_inline_comment: bool) -> Result<String, ParseError> {
         let mut result: String = String::new();
 
         while !endpoint.contains(&self.ch) {
             match self.ch {
                 None => {
                     return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
+                }
+                #[cfg(feature = "inline-comment")]
+                Some(' ') if check_inline_comment => {
+                    self.bump();
+
+                    match self.ch {
+                        Some('#') | Some(';') => {
+                            // [space]#, [space]; starts an inline comment
+                            break;
+                        }
+                        Some(c) => {
+                            result.push(' ');
+                            result.push(c);
+                        }
+                        None => {
+                            result.push(' ');
+                        }
+                    }
                 }
                 Some('\\') if self.opt.enabled_escape => {
                     self.bump();
@@ -1215,6 +1232,8 @@ impl<'a> Parser<'a> {
             }
             self.bump();
         }
+
+        let _ = check_inline_comment;
         Ok(result)
     }
 
@@ -1223,54 +1242,46 @@ impl<'a> Parser<'a> {
             if #[cfg(feature = "brackets-in-section-names")] {
                 // Skip [
                 self.bump();
-                let endpoint;
-                cfg_if! {
-                    if #[cfg(feature = "inline-comment")] {
-                        endpoint = &[Some('\r'), Some('\n'), Some('#'), Some(';')]
-                    } else {
-                        endpoint = &[Some('\r'), Some('\n')];
-                    }
+
+                let mut s = match self.parse_str_until(&[Some('\r'), Some('\n')], cfg!(feature = "inline-comment")) {
+                    Ok(r) => r,
+                    Err(err) => return Err(err)
+                };
+
+                // Deal with inline comment
+                #[cfg(feature = "inline-comment")]
+                if matches!(self.ch, Some('#') | Some(';')) {
+                    self.parse_comment();
                 }
 
-                let result = self.parse_str_until(endpoint);
-                if result.is_err() {
-                    return result;
+                let tr = s.trim_end_matches(|c| c == ' ' || c == '\t');
+                if !tr.ends_with(']') {
+                    return self.error("section must be ended with ']'");
                 }
 
-                cfg_if! {
-                    if #[cfg(feature = "inline-comment")] {
-                        match self.ch {
-                            Some('#') | Some(';') => {
-                                let r = self.parse_str_until(&[Some('\r'), Some('\n')]);
-                                if r.is_err() {
-                                    return r;
-                                }
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-
-                let s = result.unwrap();
-                let cut= s.chars().rev().take_while(|c| *c != ']').count();
-                let len = s.len() - cut - 1;
-                if cut > 0 {
-                    let all_acceptable = s[len+1..].chars().all(|c| c == ' ' || c == '\t');
-                    if !all_acceptable {
-                        return self.error("not acceptable character after section end");
-                    }
-                }
-                Ok(String::from(&s[0..len]))
+                s.truncate(tr.len() - 1);
+                Ok(s)
             } else {
                 // Skip [
                 self.bump();
-                self.parse_str_until(&[Some(']')])
+                let sec = self.parse_str_until(&[Some(']')], false)?;
+                if let Some(']') = self.ch {
+                    self.bump();
+                }
+
+                // Deal with inline comment
+                #[cfg(feature = "inline-comment")]
+                if matches!(self.ch, Some('#') | Some(';')) {
+                    self.parse_comment();
+                }
+
+                Ok(sec)
             }
         }
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('='), Some(':')])
+        self.parse_str_until(&[Some('='), Some(':')], false)
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1282,32 +1293,36 @@ impl<'a> Parser<'a> {
             None => Ok(String::new()),
             Some('"') if self.opt.enabled_quote => {
                 self.bump();
-                self.parse_str_until(&[Some('"')]).and_then(|s| {
-                                                      self.bump(); // Eats the last "
-                                                                   // Parse until EOL
-                                                      self.parse_str_until_eol().map(|x| s + &x)
-                                                  })
+                self.parse_str_until(&[Some('"')], false).and_then(|s| {
+                                                             self.bump(); // Eats the last "
+                                                                          // Parse until EOL
+                                                             self.parse_str_until_eol(cfg!(feature = "inline-comment"))
+                                                                 .map(|x| s + &x)
+                                                         })
             }
             Some('\'') if self.opt.enabled_quote => {
                 self.bump();
-                self.parse_str_until(&[Some('\'')]).and_then(|s| {
-                                                       self.bump(); // Eats the last '
-                                                                    // Parse until EOL
-                                                       self.parse_str_until_eol().map(|x| s + &x)
-                                                   })
+                self.parse_str_until(&[Some('\'')], false).and_then(|s| {
+                                                              self.bump(); // Eats the last '
+                                                                           // Parse until EOL
+                                                              self.parse_str_until_eol(cfg!(feature = "inline-comment"))
+                                                                  .map(|x| s + &x)
+                                                          })
             }
-            _ => self.parse_str_until_eol(),
+            _ => self.parse_str_until_eol(cfg!(feature = "inline-comment")),
         }
     }
 
-    #[cfg(not(feature = "inline-comment"))]
-    fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('\n'), Some('\r'), None])
-    }
+    #[inline]
+    fn parse_str_until_eol(&mut self, check_inline_comment: bool) -> Result<String, ParseError> {
+        let r = self.parse_str_until(&[Some('\n'), Some('\r'), None], check_inline_comment)?;
 
-    #[cfg(feature = "inline-comment")]
-    fn parse_str_until_eol(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('\n'), Some('\r'), Some(';'), Some('#'), None])
+        #[cfg(feature = "inline-comment")]
+        if check_inline_comment && matches!(self.ch, Some('#') | Some(';')) {
+            self.parse_comment();
+        }
+
+        Ok(r)
     }
 }
 
@@ -1474,13 +1489,9 @@ mod test {
     #[test]
     fn parse_error_numbers() {
         let invalid_input = "\n\\x";
-        let ini = Ini::load_from_str_opt(
-            invalid_input,
-            ParseOption {
-                enabled_escape: true,
-                ..Default::default()
-            },
-        );
+        let ini = Ini::load_from_str_opt(invalid_input,
+                                         ParseOption { enabled_escape: true,
+                                                       ..Default::default() });
         assert!(!ini.is_ok());
 
         let err = ini.unwrap_err();
@@ -1515,10 +1526,13 @@ gender = mail ; abdddd
 [section name] # comment in section line
 name = hello # abcdefg
 gender = mail ; abdddd
+address = web#url ;# eeeeee
 ";
         let ini = Ini::load_from_str(input).unwrap();
+        println!("{:?}", ini.section(Some("section name")));
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
         assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
+        assert_eq!(ini.get_from(Some("section name"), "address").unwrap(), "web#url");
     }
 
     #[test]
