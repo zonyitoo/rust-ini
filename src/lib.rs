@@ -1163,7 +1163,7 @@ impl<'a> Parser<'a> {
                     return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
                 }
                 #[cfg(feature = "inline-comment")]
-                Some(' ') if check_inline_comment => {
+                Some(space) if check_inline_comment && (space == ' ' || space == '\t') => {
                     self.bump();
 
                     match self.ch {
@@ -1171,12 +1171,12 @@ impl<'a> Parser<'a> {
                             // [space]#, [space]; starts an inline comment
                             break;
                         }
-                        Some(c) => {
-                            result.push(' ');
-                            result.push(c);
+                        Some(_) => {
+                            result.push(space);
+                            continue;
                         }
                         None => {
-                            result.push(' ');
+                            result.push(space);
                         }
                     }
                 }
@@ -1527,12 +1527,18 @@ gender = mail ; abdddd
 name = hello # abcdefg
 gender = mail ; abdddd
 address = web#url ;# eeeeee
+phone = 01234	# tab before comment
+phone2 = 56789	 # tab + space before comment
+phone3 = 43210 	# space + tab before comment
 ";
         let ini = Ini::load_from_str(input).unwrap();
         println!("{:?}", ini.section(Some("section name")));
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
         assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
         assert_eq!(ini.get_from(Some("section name"), "address").unwrap(), "web#url");
+        assert_eq!(ini.get_from(Some("section name"), "phone").unwrap(), "01234");
+        assert_eq!(ini.get_from(Some("section name"), "phone2").unwrap(), "56789");
+        assert_eq!(ini.get_from(Some("section name"), "phone3").unwrap(), "43210");
     }
 
     #[test]
