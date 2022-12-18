@@ -1,6 +1,9 @@
 INI in Rust
 -----------
 
+.. image:: https://github.com/zonyitoo/rust-ini/actions/workflows/build-and-test.yml/badge.svg
+    :target: https://github.com/zonyitoo/rust-ini/actions/workflows/build-and-test.yml
+
 .. image:: https://img.shields.io/crates/v/rust-ini.svg
     :target: https://crates.io/crates/rust-ini
 
