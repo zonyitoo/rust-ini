@@ -192,8 +192,10 @@ pub struct ParseOption {
 
 impl Default for ParseOption {
     fn default() -> ParseOption {
-        ParseOption { enabled_quote: true,
-                      enabled_escape: true }
+        ParseOption {
+            enabled_quote: true,
+            enabled_escape: true,
+        }
     }
 }
 
@@ -253,9 +255,11 @@ pub struct WriteOption {
 
 impl Default for WriteOption {
     fn default() -> WriteOption {
-        WriteOption { escape_policy: EscapePolicy::Basics,
-                      line_separator: LineSeparator::SystemDefault,
-                      kv_separator: DEFAULT_KV_SEPARATOR }
+        WriteOption {
+            escape_policy: EscapePolicy::Basics,
+            line_separator: LineSeparator::SystemDefault,
+            kv_separator: DEFAULT_KV_SEPARATOR,
+        }
     }
 }
 
@@ -323,8 +327,9 @@ impl<'a> SectionSetter<'a> {
 
     /// Set (replace) key-value pair in this section (all with the same name)
     pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
-        where K: Into<String>,
-              V: Into<String>
+    where
+        K: Into<String>,
+        V: Into<String>,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -386,16 +391,18 @@ impl Properties {
 
     /// Insert (key, value) pair by replace
     pub fn insert<K, V>(&mut self, k: K, v: V)
-        where K: Into<String>,
-              V: Into<String>
+    where
+        K: Into<String>,
+        V: Into<String>,
     {
         self.data.insert(property_insert_key!(k.into()), v.into());
     }
 
     /// Append key with (key, value) pair
     pub fn append<K, V>(&mut self, k: K, v: V)
-        where K: Into<String>,
-              V: Into<String>
+    where
+        K: Into<String>,
+        V: Into<String>,
     {
         self.data.append(property_insert_key!(k.into()), v.into());
     }
@@ -520,7 +527,8 @@ impl Ini {
 
     /// Set with a specified section, `None` is for the general section
     pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         SectionSetter::new(self, section.map(Into::into))
     }
@@ -544,28 +552,32 @@ impl Ini {
 
     /// Get a immutable section
     pub fn section<S>(&self, name: Option<S>) -> Option<&Properties>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections.get(&section_key!(name))
     }
 
     /// Get a mutable section
     pub fn section_mut<S>(&mut self, name: Option<S>) -> Option<&mut Properties>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections.get_mut(&section_key!(name))
     }
 
     /// Get all sections immutable with the same key
     pub fn section_all<S>(&self, name: Option<S>) -> impl DoubleEndedIterator<Item = &Properties>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections.get_all(&section_key!(name))
     }
 
     /// Get all sections mutable with the same key
     pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl DoubleEndedIterator<Item = &mut Properties>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections.get_all_mut(&section_key!(name))
     }
@@ -594,7 +606,8 @@ impl Ini {
 
     /// Set key-value to a section
     pub fn set_to<S>(&mut self, section: Option<S>, key: String, value: String)
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.with_section(section).set(key, value);
     }
@@ -610,7 +623,8 @@ impl Ini {
     /// assert_eq!(ini.get_from(Some("sec"), "abc"), Some("def"));
     /// ```
     pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections.get(&section_key!(section)).and_then(|prop| prop.get(key))
     }
@@ -626,14 +640,16 @@ impl Ini {
     /// assert_eq!(ini.get_from_or(Some("sec"), "key", "default"), "default");
     /// ```
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.get_from(section, key).unwrap_or(default)
     }
 
     /// Get the first mutable value from the sections with key
     pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a mut str>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.sections
             .get_mut(&section_key!(section))
@@ -642,7 +658,8 @@ impl Ini {
 
     /// Delete the first section with key, return the properties if it exists
     pub fn delete<S>(&mut self, section: Option<S>) -> Option<Properties>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         let key = section_key!(section);
         self.sections.remove(&key)
@@ -650,7 +667,8 @@ impl Ini {
 
     /// Delete the key from the section, return the value if key exists or None
     pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         self.section_mut(section).and_then(|prop| prop.remove(key))
     }
@@ -670,7 +688,9 @@ impl Default for Ini {
     /// Creates an ini instance with an empty general section. This allows [Ini::general_section]
     /// and [Ini::with_general_section] to be called without panicking.
     fn default() -> Self {
-        let mut result = Ini { sections: Default::default() };
+        let mut result = Ini {
+            sections: Default::default(),
+        };
 
         result.sections.insert(None, Default::default());
 
@@ -726,19 +746,21 @@ impl Ini {
 
     /// Write to a file
     pub fn write_to_file_policy<P: AsRef<Path>>(&self, filename: P, policy: EscapePolicy) -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true)
-                                         .truncate(true)
-                                         .create(true)
-                                         .open(filename.as_ref())?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(filename.as_ref())?;
         self.write_to_policy(&mut file, policy)
     }
 
     /// Write to a file with options
     pub fn write_to_file_opt<P: AsRef<Path>>(&self, filename: P, opt: WriteOption) -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true)
-                                         .truncate(true)
-                                         .create(true)
-                                         .open(filename.as_ref())?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(filename.as_ref())?;
         self.write_to_opt(&mut file, opt)
     }
 
@@ -749,9 +771,13 @@ impl Ini {
 
     /// Write to a writer
     pub fn write_to_policy<W: Write>(&self, writer: &mut W, policy: EscapePolicy) -> io::Result<()> {
-        self.write_to_opt(writer,
-                          WriteOption { escape_policy: policy,
-                                        ..Default::default() })
+        self.write_to_opt(
+            writer,
+            WriteOption {
+                escape_policy: policy,
+                ..Default::default()
+            },
+        )
     }
 
     /// Write to a writer with options
@@ -777,10 +803,12 @@ impl Ini {
                     writer.write_all(opt.line_separator.as_str().as_bytes())?;
                 }
 
-                write!(writer,
-                       "[{}]{}",
-                       escape_str(&section[..], opt.escape_policy),
-                       opt.line_separator)?;
+                write!(
+                    writer,
+                    "[{}]{}",
+                    escape_str(&section[..], opt.escape_policy),
+                    opt.line_separator
+                )?;
 
                 for (k, v) in props.iter() {
                     let k_str = escape_str(&k[..], opt.escape_policy);
@@ -801,9 +829,13 @@ impl Ini {
 
     /// Load from a string, but do not interpret '\' as an escape character
     pub fn load_from_str_noescape(buf: &str) -> Result<Ini, ParseError> {
-        Ini::load_from_str_opt(buf,
-                               ParseOption { enabled_escape: false,
-                                             ..ParseOption::default() })
+        Ini::load_from_str_opt(
+            buf,
+            ParseOption {
+                enabled_escape: false,
+                ..ParseOption::default()
+            },
+        )
     }
 
     /// Load from a string with options
@@ -819,9 +851,13 @@ impl Ini {
 
     /// Load from a reader, but do not interpret '\' as an escape character
     pub fn read_from_noescape<R: Read>(reader: &mut R) -> Result<Ini, Error> {
-        Ini::read_from_opt(reader,
-                           ParseOption { enabled_escape: false,
-                                         ..ParseOption::default() })
+        Ini::read_from_opt(
+            reader,
+            ParseOption {
+                enabled_escape: false,
+                ..ParseOption::default()
+            },
+        )
     }
 
     /// Load from a reader with options
@@ -842,9 +878,13 @@ impl Ini {
 
     /// Load from a file, but do not interpret '\' as an escape character
     pub fn load_from_file_noescape<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
-        Ini::load_from_file_opt(filename,
-                                ParseOption { enabled_escape: false,
-                                              ..ParseOption::default() })
+        Ini::load_from_file_opt(
+            filename,
+            ParseOption {
+                enabled_escape: false,
+                ..ParseOption::default()
+            },
+        )
     }
 
     /// Load from a file with options
@@ -925,7 +965,9 @@ impl DoubleEndedIterator for SectionIterMut<'_> {
 impl<'a> Ini {
     /// Immutable iterate though sections
     pub fn iter(&'a self) -> SectionIter<'a> {
-        SectionIter { inner: self.sections.iter() }
+        SectionIter {
+            inner: self.sections.iter(),
+        }
     }
 
     /// Mutable iterate though sections
@@ -936,7 +978,9 @@ impl<'a> Ini {
 
     /// Mutable iterate though sections
     pub fn iter_mut(&'a mut self) -> SectionIterMut<'a> {
-        SectionIterMut { inner: self.sections.iter_mut() }
+        SectionIterMut {
+            inner: self.sections.iter_mut(),
+        }
     }
 }
 
@@ -1017,11 +1061,13 @@ impl From<io::Error> for Error {
 impl<'a> Parser<'a> {
     // Create a parser
     pub fn new(rdr: Chars<'a>, opt: ParseOption) -> Parser<'a> {
-        let mut p = Parser { ch: None,
-                             line: 0,
-                             col: 0,
-                             rdr,
-                             opt };
+        let mut p = Parser {
+            ch: None,
+            line: 0,
+            col: 0,
+            rdr,
+            opt,
+        };
         p.bump();
         p
     }
@@ -1045,9 +1091,11 @@ impl<'a> Parser<'a> {
     }
 
     fn error<U, M: Into<String>>(&self, msg: M) -> Result<U, ParseError> {
-        Err(ParseError { line: self.line + 1,
-                         col: self.col + 1,
-                         msg: msg.into() })
+        Err(ParseError {
+            line: self.line + 1,
+            col: self.col + 1,
+            msg: msg.into(),
+        })
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -1294,20 +1342,20 @@ impl<'a> Parser<'a> {
             Some('"') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('"')], false).and_then(|s| {
-                                                             self.bump(); // Eats the last "
-                                                                          // Parse until EOL
-                                                             self.parse_str_until_eol(cfg!(feature = "inline-comment"))
-                                                                 .map(|x| s + &x)
-                                                         })
+                    self.bump(); // Eats the last "
+                                 // Parse until EOL
+                    self.parse_str_until_eol(cfg!(feature = "inline-comment"))
+                        .map(|x| s + &x)
+                })
             }
             Some('\'') if self.opt.enabled_quote => {
                 self.bump();
                 self.parse_str_until(&[Some('\'')], false).and_then(|s| {
-                                                              self.bump(); // Eats the last '
-                                                                           // Parse until EOL
-                                                              self.parse_str_until_eol(cfg!(feature = "inline-comment"))
-                                                                  .map(|x| s + &x)
-                                                          })
+                    self.bump(); // Eats the last '
+                                 // Parse until EOL
+                    self.parse_str_until_eol(cfg!(feature = "inline-comment"))
+                        .map(|x| s + &x)
+                })
             }
             _ => self.parse_str_until_eol(cfg!(feature = "inline-comment")),
         }
@@ -1489,9 +1537,13 @@ mod test {
     #[test]
     fn parse_error_numbers() {
         let invalid_input = "\n\\x";
-        let ini = Ini::load_from_str_opt(invalid_input,
-                                         ParseOption { enabled_escape: true,
-                                                       ..Default::default() });
+        let ini = Ini::load_from_str_opt(
+            invalid_input,
+            ParseOption {
+                enabled_escape: true,
+                ..Default::default()
+            },
+        );
         assert!(!ini.is_ok());
 
         let err = ini.unwrap_err();
@@ -1610,8 +1662,10 @@ Key = \"Value   # This is not a comment ; at all\"
 Stuff = Other
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
-                   "Value   # This is not a comment ; at all");
+        assert_eq!(
+            ini.get_from(Some("section name"), "Key").unwrap(),
+            "Value   # This is not a comment ; at all"
+        );
     }
 
     #[test]
@@ -1658,8 +1712,10 @@ Stuff = Other
 Key = 'Value   # This is not a comment ; at all'
 ";
         let ini = Ini::load_from_str(input).unwrap();
-        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(),
-                   "Value   # This is not a comment ; at all");
+        assert_eq!(
+            ini.get_from(Some("section name"), "Key").unwrap(),
+            "Value   # This is not a comment ; at all"
+        );
     }
 
     #[test]
@@ -1848,9 +1904,14 @@ B=b";
 Exec = \"/path/to/exe with space\" arg
 ";
 
-        let opt = Ini::load_from_str_opt(input,
-                                         ParseOption { enabled_quote: false,
-                                                       ..ParseOption::default() }).unwrap();
+        let opt = Ini::load_from_str_opt(
+            input,
+            ParseOption {
+                enabled_quote: false,
+                ..ParseOption::default()
+            },
+        )
+        .unwrap();
         let sec = opt.section(Some("Desktop Entry")).unwrap();
         assert_eq!(&sec["Exec"], "\"/path/to/exe with space\" arg");
     }
@@ -1952,8 +2013,10 @@ a3 = n3
 
         let ini = Ini::new();
 
-        let opt = WriteOption { line_separator: LineSeparator::CR,
-                                ..Default::default() };
+        let opt = WriteOption {
+            line_separator: LineSeparator::CR,
+            ..Default::default()
+        };
         let mut buf = Vec::new();
         ini.write_to_opt(&mut buf, opt).unwrap();
 
@@ -1966,47 +2029,67 @@ a3 = n3
 
         let mut ini = Ini::new();
         ini.with_section(Some("Section1"))
-           .set("Key1", "Value")
-           .set("Key2", "Value");
+            .set("Key1", "Value")
+            .set("Key2", "Value");
         ini.with_section(Some("Section2"))
-           .set("Key1", "Value")
-           .set("Key2", "Value");
+            .set("Key1", "Value")
+            .set("Key2", "Value");
 
         {
             let mut buf = Vec::new();
-            ini.write_to_opt(&mut buf,
-                             WriteOption { line_separator: LineSeparator::CR,
-                                           ..Default::default() })
-               .unwrap();
+            ini.write_to_opt(
+                &mut buf,
+                WriteOption {
+                    line_separator: LineSeparator::CR,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
-            assert_eq!("[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
-                       str::from_utf8(&buf).unwrap());
+            assert_eq!(
+                "[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
+                str::from_utf8(&buf).unwrap()
+            );
         }
 
         {
             let mut buf = Vec::new();
-            ini.write_to_opt(&mut buf,
-                             WriteOption { line_separator: LineSeparator::CRLF,
-                                           ..Default::default() })
-               .unwrap();
+            ini.write_to_opt(
+                &mut buf,
+                WriteOption {
+                    line_separator: LineSeparator::CRLF,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
-            assert_eq!("[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
-                       str::from_utf8(&buf).unwrap());
+            assert_eq!(
+                "[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
+                str::from_utf8(&buf).unwrap()
+            );
         }
 
         {
             let mut buf = Vec::new();
-            ini.write_to_opt(&mut buf,
-                             WriteOption { line_separator: LineSeparator::SystemDefault,
-                                           ..Default::default() })
-               .unwrap();
+            ini.write_to_opt(
+                &mut buf,
+                WriteOption {
+                    line_separator: LineSeparator::SystemDefault,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
             if cfg!(windows) {
-                assert_eq!("[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
-                           str::from_utf8(&buf).unwrap());
+                assert_eq!(
+                    "[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
+                    str::from_utf8(&buf).unwrap()
+                );
             } else {
-                assert_eq!("[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
-                           str::from_utf8(&buf).unwrap());
+                assert_eq!(
+                    "[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
+                    str::from_utf8(&buf).unwrap()
+                );
             }
         }
     }
@@ -2017,20 +2100,34 @@ a3 = n3
 
         let mut ini = Ini::new();
         ini.with_section(Some("Section1"))
-           .set("Key1", "Value")
-           .set("Key2", "Value");
+            .set("Key1", "Value")
+            .set("Key2", "Value");
         ini.with_section(Some("Section2"))
-           .set("Key1", "Value")
-           .set("Key2", "Value");
+            .set("Key1", "Value")
+            .set("Key2", "Value");
 
         let mut buf = Vec::new();
-        ini.write_to_opt(&mut buf,
-                         WriteOption { kv_separator: " = ",
-                                       ..Default::default() })
-           .unwrap();
+        ini.write_to_opt(
+            &mut buf,
+            WriteOption {
+                kv_separator: " = ",
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-        assert_eq!("[Section1]\nKey1 = Value\nKey2 = Value\n\n[Section2]\nKey1 = Value\nKey2 = Value\n",
-                   str::from_utf8(&buf).unwrap());
+        // Test different line endings in Windows and Unix
+        if cfg!(windows) {
+            assert_eq!(
+                "[Section1]\r\nKey1 = Value\r\nKey2 = Value\r\n\r\n[Section2]\r\nKey1 = Value\r\nKey2 = Value\r\n",
+                str::from_utf8(&buf).unwrap()
+            );
+        } else {
+            assert_eq!(
+                "[Section1]\nKey1 = Value\nKey2 = Value\n\n[Section2]\nKey1 = Value\nKey2 = Value\n",
+                str::from_utf8(&buf).unwrap()
+            );
+        }
     }
 
     #[test]
@@ -2123,9 +2220,11 @@ bar = f
     fn invalid_codepoint() {
         use std::io::Cursor;
 
-        let d = vec![10, 8, 68, 8, 61, 10, 126, 126, 61, 49, 10, 62, 8, 8, 61, 10, 91, 93, 93, 36, 91, 61, 10, 75, 91,
-                     10, 10, 10, 61, 92, 120, 68, 70, 70, 70, 70, 70, 126, 61, 10, 0, 0, 61, 10, 38, 46, 49, 61, 0,
-                     39, 0, 0, 46, 92, 120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0,];
+        let d = vec![
+            10, 8, 68, 8, 61, 10, 126, 126, 61, 49, 10, 62, 8, 8, 61, 10, 91, 93, 93, 36, 91, 61, 10, 75, 91, 10, 10,
+            10, 61, 92, 120, 68, 70, 70, 70, 70, 70, 126, 61, 10, 0, 0, 61, 10, 38, 46, 49, 61, 0, 39, 0, 0, 46, 92,
+            120, 46, 36, 91, 91, 1, 0, 0, 16, 0, 0, 0, 0, 0, 0,
+        ];
         let mut file = Cursor::new(d);
         assert!(Ini::read_from(&mut file).is_err());
     }

@@ -1,0 +1,48 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@5.0
+
+executors:
+  docker:
+    docker:
+      - image: cimg/rust:1.65
+  linux:
+    machine: true
+  macos:
+    macos:
+      xcode: 12.5.1
+
+jobs:
+  test:
+    parameters:
+      platform:
+        type: executor
+    executor: << parameters.platform >>
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}
+            - cargo-v1-{{ arch }}
+      - run: curl -o rustup https://sh.rustup.rs
+      - run: bash rustup -y
+      - run: rm ~/.gitconfig
+      - run: ~/.cargo/bin/cargo test -v --no-fail-fast
+      - run: ~/.cargo/bin/cargo test -v --no-fail-fast --features inline-comment
+      - run: ~/.cargo/bin/cargo test -v --no-fail-fast --features case-insensitive
+      - run: ~/.cargo/bin/cargo doc --no-deps
+      - save_cache:
+          key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}
+          paths:
+            - ~/.cargo
+
+workflows:
+  workflow:
+    jobs:
+      - test:
+          name: test-on-<< matrix.platform >>
+          matrix:
+            parameters:
+              platform: ["docker", "macos", "win/default", "linux"]
+# VS Code Extension Version: 1.4.0
