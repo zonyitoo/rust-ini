@@ -1,9 +1,6 @@
 INI in Rust
 -----------
 
-.. image:: https://travis-ci.org/zonyitoo/rust-ini.svg?branch=master
-    :target: https://travis-ci.org/zonyitoo/rust-ini
-
 .. image:: https://img.shields.io/crates/v/rust-ini.svg
     :target: https://crates.io/crates/rust-ini
 
