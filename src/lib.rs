@@ -61,16 +61,27 @@ use unicase::UniCase;
 /// Policies for escaping logic
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EscapePolicy {
-    /// escape absolutely nothing (dangerous)
+    /// Escape absolutely nothing (dangerous)
     Nothing,
-    /// only escape the most necessary things
+    /// Only escape the most necessary things.
+    /// This means backslashes, control characters (codepoints U+0000 to U+001F), and delete (U+007F).
+    /// Quotes (single or double) are not escaped.
     Basics,
-    /// escape basics and non-ascii characters
+    /// Escape basics and non-ASCII characters in the [Basic Multilingual Plane](https://www.compart.com/en/unicode/plane)
+    /// (i.e. between U+007F - U+FFFF)
+    /// Codepoints above U+FFFF, e.g. '🐱' U+1F431 "CAT FACE" will *not* be escaped!
     BasicsUnicode,
+    /// Escape basics and all non-ASCII characters, including codepoints above U+FFFF.
+    /// This will escape emoji - if you want them to remain raw, use BasicsUnicode instead.
+    BasicsUnicodeExtended,
     /// Escape reserved symbols.
+    /// This includes everything in EscapePolicy::Basics, plus the comment characters ';' and '#' and the key/value-separating characters '=' and ':'.
     Reserved,
-    /// Escape reserved symbols and non-ascii characters
+    /// Escape reserved symbols and non-ASCII characters in the BMP.
+    /// Codepoints above U+FFFF, e.g. '🐱' U+1F431 "CAT FACE" will *not* be escaped!
     ReservedUnicode,
+    /// Escape reserved symbols and all non-ASCII characters, including codepoints above U+FFFF.
+    ReservedUnicodeExtended,
     /// Escape everything that some INI implementations assume
     Everything,
 }
@@ -87,6 +98,7 @@ impl EscapePolicy {
         match self {
             EscapePolicy::Reserved => true,
             EscapePolicy::ReservedUnicode => true,
+            EscapePolicy::ReservedUnicodeExtended => true,
             EscapePolicy::Everything => true,
             _ => false,
         }
@@ -95,7 +107,18 @@ impl EscapePolicy {
     fn escape_unicode(self) -> bool {
         match self {
             EscapePolicy::BasicsUnicode => true,
+            EscapePolicy::BasicsUnicodeExtended => true,
             EscapePolicy::ReservedUnicode => true,
+            EscapePolicy::ReservedUnicodeExtended => true,
+            EscapePolicy::Everything => true,
+            _ => false,
+        }
+    }
+
+    fn escape_unicode_extended(self) -> bool {
+        match self {
+            EscapePolicy::BasicsUnicodeExtended => true,
+            EscapePolicy::ReservedUnicodeExtended => true,
             EscapePolicy::Everything => true,
             _ => false,
         }
@@ -110,6 +133,7 @@ impl EscapePolicy {
             '\\' | '\x00'..='\x1f' | '\x7f' => self.escape_basics(),
             ';' | '#' | '=' | ':' => self.escape_reserved(),
             '\u{0080}'..='\u{FFFF}' => self.escape_unicode(),
+            '\u{10000}'..='\u{10FFFF}' => self.escape_unicode_extended(),
             _ => false,
         }
     }
@@ -155,6 +179,9 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
             '\u{0080}'..='\u{FFFF}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
+            // Longer escapes.
+            '\u{10000}'..='\u{FFFFF}' => escaped.push_str(&format!("\\x{:05x}", c as isize)[..]),
+            '\u{100000}'..='\u{10FFFF}' => escaped.push_str(&format!("\\x{:06x}", c as isize)[..]),
             _ => {
                 escaped.push('\\');
                 escaped.push(c);
@@ -2284,5 +2311,97 @@ c = d
 ";
         let ini = Ini::load_from_str(input);
         assert!(ini.is_err());
+    }
+
+    #[test]
+    fn escape_str_nothing_policy() {
+        let test_str = "\0\x07\n字'\"✨🍉杓";
+        // This policy should never escape anything.
+        let policy = EscapePolicy::Nothing;
+        assert_eq!(escape_str(test_str, policy), test_str);
+    }
+    
+    #[test]
+    fn escape_str_basics() {
+        let test_backslash = r"\backslashes\";
+        let test_nul = "string with \x00nulls\x00 in it";
+        let test_controls = "|\x07| bell, |\x08| backspace, |\x7f| delete, |\x1b| escape";
+        let test_whitespace = "\t \r\n";
+
+        assert_eq!(escape_str(test_backslash, EscapePolicy::Nothing), test_backslash);
+        assert_eq!(escape_str(test_nul, EscapePolicy::Nothing), test_nul);
+        assert_eq!(escape_str(test_controls, EscapePolicy::Nothing), test_controls);
+        assert_eq!(escape_str(test_whitespace, EscapePolicy::Nothing), test_whitespace);
+
+        for policy in vec![
+            EscapePolicy::Basics, EscapePolicy::BasicsUnicode, EscapePolicy::BasicsUnicodeExtended,
+            EscapePolicy::Reserved, EscapePolicy::ReservedUnicode, EscapePolicy::ReservedUnicodeExtended,
+            EscapePolicy::Everything,
+        ] {
+            assert_eq!(escape_str(test_backslash, policy), r"\\backslashes\\");
+            assert_eq!(escape_str(test_nul, policy), r"string with \0nulls\0 in it");
+            assert_eq!(escape_str(test_controls, policy), r"|\a| bell, |\b| backspace, |\x007f| delete, |\x001b| escape");
+            assert_eq!(escape_str(test_whitespace, policy), r"\t \r\n");
+        }
+    }
+
+    #[test]
+    fn escape_str_reserved() {
+        // Test reserved characters.
+        let test_reserved = ":=;#";
+        // And characters which are *not* reserved, but look like they might be.
+        let test_punctuation = "!@$%^&*()-_+/?.>,<[]{}``";
+
+        // These policies should *not* escape reserved characters.
+        for policy in vec![
+            EscapePolicy::Nothing,
+            EscapePolicy::Basics, EscapePolicy::BasicsUnicode, EscapePolicy::BasicsUnicodeExtended,
+        ] {
+            assert_eq!(escape_str(test_reserved, policy), ":=;#");
+            assert_eq!(escape_str(test_punctuation, policy), test_punctuation);
+        }
+
+        // These should.
+        for policy in vec![
+            EscapePolicy::Reserved, EscapePolicy::ReservedUnicodeExtended, EscapePolicy::ReservedUnicode,
+            EscapePolicy::Everything,
+        ] {
+            assert_eq!(escape_str(test_reserved, policy), r"\:\=\;\#");
+            assert_eq!(escape_str(test_punctuation, policy), "!@$%^&*()-_+/?.>,<[]{}``");
+        }
+    }
+
+    #[test]
+    fn escape_str_unicode() {
+        // Test unicode escapes.
+        // The first are Basic Multilingual Plane (BMP) characters - i.e. <= U+FFFF
+        // Emoji are above U+FFFF (e.g. in the 1F???? range), and the CJK characters are in the U+20???? range.
+        // The last one is for codepoints at the edge of Rust's char type.
+        let test_unicode = r"é£∳字✨";
+        let test_emoji = r"🐱😉";
+        let test_cjk = r"𠈌𠕇";
+        let test_high_points = "\u{10ABCD}\u{10FFFF}";
+
+        let policy = EscapePolicy::Nothing;
+        assert_eq!(escape_str(test_unicode, policy), test_unicode);
+        assert_eq!(escape_str(test_emoji, policy), test_emoji);
+        assert_eq!(escape_str(test_high_points, policy), test_high_points);
+
+        // The "Unicode" policies should escape standard BMP unicode, but should *not* escape emoji or supplementary CJK codepoints.
+        // The Basics/Reserved policies should behave identically in this regard.
+        for policy in vec![EscapePolicy::BasicsUnicode, EscapePolicy::ReservedUnicode] {
+            assert_eq!(escape_str(test_unicode, policy), r"\x00e9\x00a3\x2233\x5b57\x2728");
+            assert_eq!(escape_str(test_emoji, policy), test_emoji);
+            assert_eq!(escape_str(test_cjk, policy), test_cjk);
+            assert_eq!(escape_str(test_high_points, policy), test_high_points);
+        }
+
+        // UnicodeExtended policies should escape both BMP and supplementary plane characters.
+        for policy in vec![EscapePolicy::BasicsUnicodeExtended, EscapePolicy::ReservedUnicodeExtended] {
+            assert_eq!(escape_str(test_unicode, policy), r"\x00e9\x00a3\x2233\x5b57\x2728");
+            assert_eq!(escape_str(test_emoji, policy), r"\x1f431\x1f609");
+            assert_eq!(escape_str(test_cjk, policy), r"\x2020c\x20547");
+            assert_eq!(escape_str(test_high_points, policy), r"\x10abcd\x10ffff");
+        }
     }
 }
