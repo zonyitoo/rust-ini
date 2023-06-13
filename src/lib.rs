@@ -215,6 +215,17 @@ pub struct ParseOption {
     ///
     /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
     pub enabled_escape: bool,
+
+    /// Don't allow a key which contains no value
+    /// For example
+    /// ```ini
+    /// [Section]
+    /// Key1
+    /// Key2=C:\Windows
+    /// ```
+    /// 
+    /// If `dont_allow_no_value` is true, then the given ini file is not valid.
+    pub dont_allow_no_value: bool,
 }
 
 impl Default for ParseOption {
@@ -222,6 +233,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
+            dont_allow_no_value: true,
         }
     }
 }
@@ -1357,7 +1369,7 @@ impl<'a> Parser<'a> {
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
         let key = self.parse_str_until(&[Some('='), Some(':'), Some('\n')], false)?;
-        if self.ch == Some('\n') {
+        if self.opt.dont_allow_no_value && self.ch == Some('\n') {
             return self.error("Value is missing");
         } else {
             Ok(key)
