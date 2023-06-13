@@ -1356,7 +1356,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('='), Some(':')], false)
+        let key = self.parse_str_until(&[Some('='), Some(':'), Some('\n')], false)?;
+        if self.ch == Some('\n') {
+            return self.error("Value is missing");
+        } else {
+            Ok(key)
+        }
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1559,6 +1564,13 @@ mod test {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]\nfoo=bar";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
+    }
+
+    #[test]
+    fn parse_when_value_missing() {
+        let invalid_input = "[sec1]\nkey1\nkey2=377";
+        let ini = Ini::load_from_str(invalid_input);
+        assert!(ini.is_err())
     }
 
     #[test]
