@@ -806,37 +806,28 @@ impl Ini {
     pub fn write_to_opt<W: Write>(&self, writer: &mut W, opt: WriteOption) -> io::Result<()> {
         let mut firstline = true;
 
-        if let Some(props) = self.sections.get(&None) {
-            for (k, v) in props.iter() {
-                let k_str = escape_str(k, opt.escape_policy);
-                let v_str = escape_str(v, opt.escape_policy);
-                write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
-
-                firstline = false;
-            }
-        }
-
         for (section, props) in &self.sections {
-            if let Some(ref section) = *section {
+            if !props.data.is_empty() {
                 if firstline {
                     firstline = false;
                 } else {
                     // Write an empty line between sections
                     writer.write_all(opt.line_separator.as_str().as_bytes())?;
                 }
+            }
 
+            if let Some(ref section) = *section {
                 write!(
                     writer,
                     "[{}]{}",
                     escape_str(&section[..], opt.escape_policy),
                     opt.line_separator
                 )?;
-
-                for (k, v) in props.iter() {
-                    let k_str = escape_str(k, opt.escape_policy);
-                    let v_str = escape_str(v, opt.escape_policy);
-                    write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
-                }
+            }
+            for (k, v) in props.iter() {
+                let k_str = escape_str(k, opt.escape_policy);
+                let v_str = escape_str(v, opt.escape_policy);
+                write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
             }
         }
         Ok(())
