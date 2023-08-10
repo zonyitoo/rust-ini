@@ -810,7 +810,7 @@ impl Ini {
             for (k, v) in props.iter() {
                 let k_str = escape_str(k, opt.escape_policy);
                 let v_str = escape_str(v, opt.escape_policy);
-                write!(writer, "{}={}{}", k_str, v_str, opt.line_separator)?;
+                write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
 
                 firstline = false;
             }
@@ -2119,6 +2119,9 @@ a3 = n3
         use std::str;
 
         let mut ini = Ini::new();
+        ini.with_section(None::<String>)
+            .set("Key1", "Value")
+            .set("Key2", "Value");
         ini.with_section(Some("Section1"))
             .set("Key1", "Value")
             .set("Key2", "Value");
@@ -2139,12 +2142,12 @@ a3 = n3
         // Test different line endings in Windows and Unix
         if cfg!(windows) {
             assert_eq!(
-                "[Section1]\r\nKey1 = Value\r\nKey2 = Value\r\n\r\n[Section2]\r\nKey1 = Value\r\nKey2 = Value\r\n",
+                "Key1 = Value\r\nKey2 = Value\r\n\r\n[Section1]\r\nKey1 = Value\r\nKey2 = Value\r\n\r\n[Section2]\r\nKey1 = Value\r\nKey2 = Value\r\n",
                 str::from_utf8(&buf).unwrap()
             );
         } else {
             assert_eq!(
-                "[Section1]\nKey1 = Value\nKey2 = Value\n\n[Section2]\nKey1 = Value\nKey2 = Value\n",
+                "Key1 = Value\nKey2 = Value\n\n[Section1]\nKey1 = Value\nKey2 = Value\n\n[Section2]\nKey1 = Value\nKey2 = Value\n",
                 str::from_utf8(&buf).unwrap()
             );
         }
