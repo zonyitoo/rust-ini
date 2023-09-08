@@ -42,19 +42,22 @@
 //! }
 //! ```
 
-use std::char;
-use std::error;
-use std::fmt::{self, Display};
-use std::fs::{File, OpenOptions};
-use std::io::{self, Read, Write};
-use std::io::{Seek, SeekFrom};
-use std::ops::{Index, IndexMut};
-use std::path::Path;
-use std::str::Chars;
+use std::{
+    char,
+    error,
+    fmt::{self, Display},
+    fs::{File, OpenOptions},
+    io::{self, Read, Seek, SeekFrom, Write},
+    ops::{Index, IndexMut},
+    path::Path,
+    str::Chars,
+};
 
 use cfg_if::cfg_if;
-use ordered_multimap::list_ordered_multimap::{Entry, Iter, IterMut, OccupiedEntry, VacantEntry};
-use ordered_multimap::ListOrderedMultimap;
+use ordered_multimap::{
+    list_ordered_multimap::{Entry, Iter, IterMut, OccupiedEntry, VacantEntry},
+    ListOrderedMultimap,
+};
 #[cfg(feature = "case-insensitive")]
 use unicase::UniCase;
 
@@ -996,8 +999,8 @@ impl<'a> Ini {
 }
 
 impl<'a> IntoIterator for &'a Ini {
-    type Item = (Option<&'a str>, &'a Properties);
     type IntoIter = SectionIter<'a>;
+    type Item = (Option<&'a str>, &'a Properties);
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -1005,8 +1008,8 @@ impl<'a> IntoIterator for &'a Ini {
 }
 
 impl<'a> IntoIterator for &'a mut Ini {
-    type Item = (Option<&'a str>, &'a mut Properties);
     type IntoIter = SectionIterMut<'a>;
+    type Item = (Option<&'a str>, &'a mut Properties);
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
