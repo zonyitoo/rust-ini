@@ -55,7 +55,7 @@ use std::{
 
 use cfg_if::cfg_if;
 use ordered_multimap::{
-    list_ordered_multimap::{Entry, Iter, IterMut, OccupiedEntry, VacantEntry},
+    list_ordered_multimap::{Entry, IntoIter, Iter, IterMut, OccupiedEntry, VacantEntry},
     ListOrderedMultimap,
 };
 #[cfg(feature = "case-insensitive")]
@@ -976,6 +976,29 @@ impl DoubleEndedIterator for SectionIterMut<'_> {
     }
 }
 
+/// Iterator for traversing sections
+pub struct SectionIntoIter {
+    inner: IntoIter<SectionKey, Properties>,
+}
+
+impl Iterator for SectionIntoIter {
+    type Item = (SectionKey, Properties);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for SectionIntoIter {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back()
+    }
+}
+
 impl<'a> Ini {
     /// Immutable iterate though sections
     pub fn iter(&'a self) -> SectionIter<'a> {
@@ -1013,6 +1036,17 @@ impl<'a> IntoIterator for &'a mut Ini {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
+    }
+}
+
+impl IntoIterator for Ini {
+    type IntoIter = SectionIntoIter;
+    type Item = (SectionKey, Properties);
+
+    fn into_iter(self) -> Self::IntoIter {
+        SectionIntoIter {
+            inner: self.sections.into_iter(),
+        }
     }
 }
 
