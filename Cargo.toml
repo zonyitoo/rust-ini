@@ -8,6 +8,7 @@ documentation = "https://docs.rs/rust-ini/"
 keywords = ["ini", "configuration", "conf", "cfg"]
 license = "MIT"
 edition = "2018"
+rust-version = "1.64"
 
 [lib]
 name = "ini"
