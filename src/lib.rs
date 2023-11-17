@@ -405,8 +405,17 @@ impl Properties {
     }
 
     /// Get an iterator of the properties
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&str, &str)> {
-        self.data.iter().map(|(k, v)| (k.as_ref(), v.as_str()))
+    pub fn iter(&self) -> PropertyIter {
+        PropertyIter {
+            inner: self.data.iter(),
+        }
+    }
+
+    /// Get a mutable iterator of the properties
+    pub fn iter_mut(&mut self) -> PropertyIterMut {
+        PropertyIterMut {
+            inner: self.data.iter_mut(),
+        }
     }
 
     /// Return true if property exist
@@ -465,6 +474,102 @@ impl<S: AsRef<str>> Index<S> for Properties {
         match self.get(s) {
             Some(p) => p,
             None => panic!("Key `{}` does not exist", s),
+        }
+    }
+}
+
+pub struct PropertyIter<'a> {
+    inner: Iter<'a, PropertyKey, String>,
+}
+
+impl<'a> Iterator for PropertyIter<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k.as_ref(), v.as_ref()))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for PropertyIter<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(k, v)| (k.as_ref(), v.as_ref()))
+    }
+}
+
+/// Iterator for traversing sections
+pub struct PropertyIterMut<'a> {
+    inner: IterMut<'a, PropertyKey, String>,
+}
+
+impl<'a> Iterator for PropertyIterMut<'a> {
+    type Item = (&'a str, &'a mut String);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k.as_ref(), v))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for PropertyIterMut<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(k, v)| (k.as_ref(), v))
+    }
+}
+
+pub struct PropertiesIntoIter {
+    inner: IntoIter<PropertyKey, String>,
+}
+
+impl Iterator for PropertiesIntoIter {
+    type Item = (String, String);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k.into(), v))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for PropertiesIntoIter {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(k, v)| (k.into(), v))
+    }
+}
+
+impl<'a> IntoIterator for &'a Properties {
+    type IntoIter = PropertyIter<'a>;
+    type Item = (&'a str, &'a str);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Properties {
+    type IntoIter = PropertyIterMut<'a>;
+    type Item = (&'a str, &'a mut String);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl IntoIterator for Properties {
+    type IntoIter = PropertiesIntoIter;
+    type Item = (String, String);
+
+    fn into_iter(self) -> Self::IntoIter {
+        PropertiesIntoIter {
+            inner: self.data.into_iter(),
         }
     }
 }
@@ -2441,5 +2546,41 @@ c = d
             assert_eq!(escape_str(test_cjk, policy), r"\x2020c\x20547");
             assert_eq!(escape_str(test_high_points, policy), r"\x10abcd\x10ffff");
         }
+    }
+
+    #[test]
+    fn iter_mut_preserve_order_in_section() {
+        let input = r"
+x2 = nc
+x1 = na
+x3 = nb
+";
+        let mut data = Ini::load_from_str(input).unwrap();
+        let section = data.general_section_mut();
+        section.iter_mut().enumerate().for_each(|(i, (_, v))| {
+            v.push_str(&i.to_string());
+        });
+        let props: Vec<_> = section.iter().collect();
+        assert_eq!(props, vec![("x2", "nc0"), ("x1", "na1"), ("x3", "nb2")]);
+    }
+
+    #[test]
+    fn preserve_order_properties_into_iter() {
+        let input = r"
+x2 = nc
+x1 = na
+x3 = nb
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let (_, section) = data.into_iter().next().unwrap();
+        let props: Vec<_> = section.into_iter().collect();
+        assert_eq!(
+            props,
+            vec![
+                ("x2".to_owned(), "nc".to_owned()),
+                ("x1".to_owned(), "na".to_owned()),
+                ("x3".to_owned(), "nb".to_owned())
+            ]
+        );
     }
 }
