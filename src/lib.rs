@@ -43,8 +43,8 @@
 //! ```
 
 use std::{
-    char,
-    error,
+    borrow::Cow,
+    char, error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -1169,7 +1169,7 @@ struct Parser<'a> {
 pub struct ParseError {
     pub line: usize,
     pub col: usize,
-    pub msg: String,
+    pub msg: Cow<'static, str>,
 }
 
 impl Display for ParseError {
@@ -1243,7 +1243,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn error<U, M: Into<String>>(&self, msg: M) -> Result<U, ParseError> {
+    fn error<U, M: Into<Cow<'static, str>>>(&self, msg: M) -> Result<U, ParseError> {
         Err(ParseError {
             line: self.line + 1,
             col: self.col + 1,
