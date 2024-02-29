@@ -1245,6 +1245,8 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
     fn error<U, M: Into<Cow<'static, str>>>(&self, msg: M) -> Result<U, ParseError> {
         Err(ParseError {
             line: self.line + 1,
