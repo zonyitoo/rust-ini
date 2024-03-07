@@ -58,6 +58,7 @@ use ordered_multimap::{
     list_ordered_multimap::{Entry, IntoIter, Iter, IterMut, OccupiedEntry, VacantEntry},
     ListOrderedMultimap,
 };
+use trim_in_place::TrimInPlace;
 #[cfg(feature = "case-insensitive")]
 use unicase::UniCase;
 
@@ -1297,9 +1298,9 @@ impl<'a> Parser<'a> {
                     self.parse_comment();
                 }
                 '[' => match self.parse_section() {
-                    Ok(sec) => {
-                        let msec = sec[..].trim();
-                        cursec = Some((*msec).to_string());
+                    Ok(mut sec) => {
+                        sec.trim_in_place();
+                        cursec = Some(sec);
                         match result.entry(cursec.clone()) {
                             SectionEntry::Vacant(v) => {
                                 v.insert(Default::default());
@@ -1316,8 +1317,8 @@ impl<'a> Parser<'a> {
                         return self.error("missing key");
                     }
                     match self.parse_val() {
-                        Ok(val) => {
-                            let mval = val[..].trim().to_owned();
+                        Ok(mut mval) => {
+                            mval.trim_in_place();
                             match result.entry(cursec.clone()) {
                                 SectionEntry::Vacant(v) => {
                                     // cursec must be None (the General Section)
@@ -1336,8 +1337,8 @@ impl<'a> Parser<'a> {
                     }
                 }
                 _ => match self.parse_key() {
-                    Ok(key) => {
-                        let mkey: String = key[..].trim().to_owned();
+                    Ok(mut mkey) => {
+                        mkey.trim_in_place();
                         curkey = mkey;
                     }
                     Err(e) => return Err(e),
