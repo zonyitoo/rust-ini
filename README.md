@@ -10,7 +10,7 @@ This is an INI file parser in [Rust](http://www.rust-lang.org/).
 
 ```toml
 [dependencies]
-rust-ini = "0.19"
+rust-ini = "0.20"
 ```
 
 ## Usage
