@@ -530,6 +530,7 @@ pub struct PropertiesIntoIter {
 impl Iterator for PropertiesIntoIter {
     type Item = (String, String);
 
+    #[cfg_attr(not(feature = "case-insensitive"), allow(clippy::useless_conversion))]
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|(k, v)| (k.into(), v))
     }
@@ -540,6 +541,7 @@ impl Iterator for PropertiesIntoIter {
 }
 
 impl DoubleEndedIterator for PropertiesIntoIter {
+    #[cfg_attr(not(feature = "case-insensitive"), allow(clippy::useless_conversion))]
     fn next_back(&mut self) -> Option<Self::Item> {
         self.inner.next_back().map(|(k, v)| (k.into(), v))
     }
@@ -715,7 +717,7 @@ impl Ini {
     /// Get the entry
     #[cfg(not(feature = "case-insensitive"))]
     pub fn entry(&mut self, name: Option<String>) -> SectionEntry<'_> {
-        SectionEntry::from(self.sections.entry(name.map(|s| s)))
+        SectionEntry::from(self.sections.entry(name))
     }
 
     /// Get the entry
