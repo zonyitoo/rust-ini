@@ -1228,10 +1228,6 @@ impl<'a> Parser<'a> {
         p
     }
 
-    fn eof(&self) -> bool {
-        self.ch.is_none()
-    }
-
     fn bump(&mut self) {
         self.ch = self.rdr.next();
         match self.ch {
@@ -1254,6 +1250,18 @@ impl<'a> Parser<'a> {
             col: self.col + 1,
             msg: msg.into(),
         })
+    }
+
+    #[cold]
+    fn eof_error(&self, expecting: &[Option<char>]) -> Result<char, ParseError> {
+        self.error(format!("expecting \"{:?}\" but found EOF.", expecting))
+    }
+
+    fn char_or_eof(&self, expecting: &[Option<char>]) -> Result<char, ParseError> {
+        match self.ch {
+            Some(ch) => Ok(ch),
+            None => self.eof_error(expecting),
+        }
     }
 
     /// Consume all the white space until the end of the line or a tab
@@ -1364,12 +1372,9 @@ impl<'a> Parser<'a> {
         let mut result: String = String::new();
 
         while !endpoint.contains(&self.ch) {
-            match self.ch {
-                None => {
-                    return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
-                }
+            match self.char_or_eof(endpoint)? {
                 #[cfg(feature = "inline-comment")]
-                Some(space) if check_inline_comment && (space == ' ' || space == '\t') => {
+                space if check_inline_comment && (space == ' ' || space == '\t') => {
                     self.bump();
 
                     match self.ch {
@@ -1386,12 +1391,9 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                Some('\\') if self.opt.enabled_escape => {
+                '\\' if self.opt.enabled_escape => {
                     self.bump();
-                    if self.eof() {
-                        return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
-                    }
-                    match self.ch.unwrap() {
+                    match self.char_or_eof(endpoint)? {
                         '0' => result.push('\0'),
                         'a' => result.push('\x07'),
                         'b' => result.push('\x08'),
@@ -1404,9 +1406,8 @@ impl<'a> Parser<'a> {
                             let mut code: String = String::with_capacity(4);
                             for _ in 0..4 {
                                 self.bump();
-                                if self.eof() {
-                                    return self.error(format!("expecting \"{:?}\" but found EOF.", endpoint));
-                                } else if let Some('\\') = self.ch {
+                                let ch = self.char_or_eof(endpoint)?;
+                                if ch == '\\' {
                                     self.bump();
                                     if self.ch != Some('\n') {
                                         return self.error(format!(
@@ -1416,24 +1417,20 @@ impl<'a> Parser<'a> {
                                         ));
                                     }
                                 }
-                                code.push(self.ch.unwrap());
+
+                                code.push(ch);
                             }
                             let r = u32::from_str_radix(&code[..], 16);
-                            match r {
-                                Ok(c) => match char::from_u32(c) {
-                                    Some(c) => result.push(c),
-                                    None => {
-                                        return self.error("unknown character in \\xHH form");
-                                    }
-                                },
-                                Err(_) => return self.error("unknown character in \\xHH form"),
+                            match r.ok().and_then(char::from_u32) {
+                                Some(ch) => result.push(ch),
+                                None => return self.error("unknown character in \\xHH form"),
                             }
                         }
                         c => result.push(c),
                     }
                 }
-                Some(c) => {
-                    result.push(c);
+                ch => {
+                    result.push(ch);
                 }
             }
             self.bump();
