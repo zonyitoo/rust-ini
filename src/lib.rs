@@ -365,6 +365,20 @@ impl<'a> SectionSetter<'a> {
         self
     }
 
+    /// Add (append) key-value pair in this section
+    pub fn add<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    where
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.ini
+            .entry(self.section_name.clone())
+            .or_insert_with(Default::default)
+            .append(key, value);
+
+        self
+    }
+
     /// Delete the first entry in this section with `key`
     pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
         for prop in self.ini.section_all_mut(self.section_name.as_ref()) {
