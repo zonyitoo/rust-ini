@@ -2345,6 +2345,25 @@ bar = f
     }
 
     #[test]
+    fn duplicate_properties() {
+        // Test duplicate properties in a section
+        let mut ini = Ini::new();
+        ini.with_section(Some("foo"))
+            .add("a", "1")
+            .add("a", "2");
+
+        let sec = ini.section(Some("foo")).unwrap();
+        assert_eq!(sec.get("a"), Some("1"));
+        assert_eq!(sec.get_all("a").collect::<Vec<&str>>(), vec!["1", "2"]);
+
+        // Test string representation
+        let mut buf = Vec::new();
+        ini.write_to(&mut buf).unwrap();
+        let ini_str = String::from_utf8(buf).unwrap();
+        assert_eq!(ini_str, "[foo]\na=1\na=2\n");
+    }
+
+    #[test]
     fn new_has_empty_general_section() {
         let mut ini = Ini::new();
 
