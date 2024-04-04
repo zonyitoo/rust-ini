@@ -2345,7 +2345,7 @@ bar = f
     }
 
     #[test]
-    fn duplicate_properties() {
+    fn add_properties_api() {
         // Test duplicate properties in a section
         let mut ini = Ini::new();
         ini.with_section(Some("foo"))
