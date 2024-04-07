@@ -353,9 +353,9 @@ impl<'a> SectionSetter<'a> {
 
     /// Set (replace) key-value pair in this section (all with the same name)
     pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
-    where
-        K: Into<String>,
-        V: Into<String>,
+        where
+            K: Into<String>,
+            V: Into<String>,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -367,9 +367,9 @@ impl<'a> SectionSetter<'a> {
 
     /// Add (append) key-value pair in this section
     pub fn add<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
-    where
-        K: Into<String>,
-        V: Into<String>,
+        where
+            K: Into<String>,
+            V: Into<String>,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -440,18 +440,18 @@ impl Properties {
 
     /// Insert (key, value) pair by replace
     pub fn insert<K, V>(&mut self, k: K, v: V)
-    where
-        K: Into<String>,
-        V: Into<String>,
+        where
+            K: Into<String>,
+            V: Into<String>,
     {
         self.data.insert(property_insert_key!(k.into()), v.into());
     }
 
     /// Append key with (key, value) pair
     pub fn append<K, V>(&mut self, k: K, v: V)
-    where
-        K: Into<String>,
-        V: Into<String>,
+        where
+            K: Into<String>,
+            V: Into<String>,
     {
         self.data.append(property_insert_key!(k.into()), v.into());
     }
@@ -462,7 +462,7 @@ impl Properties {
     }
 
     /// Get all values associate with the key
-    pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl DoubleEndedIterator<Item = &str> {
+    pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl DoubleEndedIterator<Item=&str> {
         self.data.get_all(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
@@ -472,7 +472,7 @@ impl Properties {
     }
 
     /// Remove the property with all values with the same key
-    pub fn remove_all<S: AsRef<str>>(&mut self, s: S) -> impl DoubleEndedIterator<Item = String> + '_ {
+    pub fn remove_all<S: AsRef<str>>(&mut self, s: S) -> impl DoubleEndedIterator<Item=String> + '_ {
         self.data.remove_all(property_get_key!(s.as_ref()))
     }
 
@@ -674,8 +674,8 @@ impl Ini {
 
     /// Set with a specified section, `None` is for the general section
     pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         SectionSetter::new(self, section.map(Into::into))
     }
@@ -699,32 +699,32 @@ impl Ini {
 
     /// Get a immutable section
     pub fn section<S>(&self, name: Option<S>) -> Option<&Properties>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.sections.get(&section_key!(name))
     }
 
     /// Get a mutable section
     pub fn section_mut<S>(&mut self, name: Option<S>) -> Option<&mut Properties>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.sections.get_mut(&section_key!(name))
     }
 
     /// Get all sections immutable with the same key
-    pub fn section_all<S>(&self, name: Option<S>) -> impl DoubleEndedIterator<Item = &Properties>
-    where
-        S: Into<String>,
+    pub fn section_all<S>(&self, name: Option<S>) -> impl DoubleEndedIterator<Item=&Properties>
+        where
+            S: Into<String>,
     {
         self.sections.get_all(&section_key!(name))
     }
 
     /// Get all sections mutable with the same key
-    pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl DoubleEndedIterator<Item = &mut Properties>
-    where
-        S: Into<String>,
+    pub fn section_all_mut<S>(&mut self, name: Option<S>) -> impl DoubleEndedIterator<Item=&mut Properties>
+        where
+            S: Into<String>,
     {
         self.sections.get_all_mut(&section_key!(name))
     }
@@ -747,14 +747,14 @@ impl Ini {
     }
 
     /// Iterate with sections
-    pub fn sections(&self) -> impl DoubleEndedIterator<Item = Option<&str>> {
+    pub fn sections(&self) -> impl DoubleEndedIterator<Item=Option<&str>> {
         self.sections.keys().map(|s| s.as_ref().map(AsRef::as_ref))
     }
 
     /// Set key-value to a section
     pub fn set_to<S>(&mut self, section: Option<S>, key: String, value: String)
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.with_section(section).set(key, value);
     }
@@ -770,8 +770,8 @@ impl Ini {
     /// assert_eq!(ini.get_from(Some("sec"), "abc"), Some("def"));
     /// ```
     pub fn get_from<'a, S>(&'a self, section: Option<S>, key: &str) -> Option<&'a str>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.sections.get(&section_key!(section)).and_then(|prop| prop.get(key))
     }
@@ -787,16 +787,16 @@ impl Ini {
     /// assert_eq!(ini.get_from_or(Some("sec"), "key", "default"), "default");
     /// ```
     pub fn get_from_or<'a, S>(&'a self, section: Option<S>, key: &str, default: &'a str) -> &'a str
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.get_from(section, key).unwrap_or(default)
     }
 
     /// Get the first mutable value from the sections with key
     pub fn get_from_mut<'a, S>(&'a mut self, section: Option<S>, key: &str) -> Option<&'a mut str>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.sections
             .get_mut(&section_key!(section))
@@ -805,8 +805,8 @@ impl Ini {
 
     /// Delete the first section with key, return the properties if it exists
     pub fn delete<S>(&mut self, section: Option<S>) -> Option<Properties>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         let key = section_key!(section);
         self.sections.remove(&key)
@@ -814,8 +814,8 @@ impl Ini {
 
     /// Delete the key from the section, return the value if key exists or None
     pub fn delete_from<S>(&mut self, section: Option<S>, key: &str) -> Option<String>
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         self.section_mut(section).and_then(|prop| prop.remove(key))
     }
@@ -1512,7 +1512,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.parse_str_until(&[Some('"')], false).and_then(|s| {
                     self.bump(); // Eats the last "
-                                 // Parse until EOL
+                    // Parse until EOL
                     self.parse_str_until_eol(cfg!(feature = "inline-comment"))
                         .map(|x| s + &x)
                 })
@@ -1521,7 +1521,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.parse_str_until(&[Some('\'')], false).and_then(|s| {
                     self.bump(); // Eats the last '
-                                 // Parse until EOL
+                    // Parse until EOL
                     self.parse_str_until_eol(cfg!(feature = "inline-comment"))
                         .map(|x| s + &x)
                 })
@@ -2080,7 +2080,7 @@ Exec = \"/path/to/exe with space\" arg
                 ..ParseOption::default()
             },
         )
-        .unwrap();
+            .unwrap();
         let sec = opt.section(Some("Desktop Entry")).unwrap();
         assert_eq!(&sec["Exec"], "\"/path/to/exe with space\" arg");
     }
@@ -2213,7 +2213,7 @@ a3 = n3
                     ..Default::default()
                 },
             )
-            .unwrap();
+                .unwrap();
 
             assert_eq!(
                 "[Section1]\nKey1=Value\nKey2=Value\n\n[Section2]\nKey1=Value\nKey2=Value\n",
@@ -2230,7 +2230,7 @@ a3 = n3
                     ..Default::default()
                 },
             )
-            .unwrap();
+                .unwrap();
 
             assert_eq!(
                 "[Section1]\r\nKey1=Value\r\nKey2=Value\r\n\r\n[Section2]\r\nKey1=Value\r\nKey2=Value\r\n",
@@ -2247,7 +2247,7 @@ a3 = n3
                     ..Default::default()
                 },
             )
-            .unwrap();
+                .unwrap();
 
             if cfg!(windows) {
                 assert_eq!(
@@ -2286,7 +2286,7 @@ a3 = n3
                 ..Default::default()
             },
         )
-        .unwrap();
+            .unwrap();
 
         // Test different line endings in Windows and Unix
         if cfg!(windows) {
@@ -2374,7 +2374,11 @@ bar = f
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
-        assert_eq!(ini_str, "[foo]\na=1\na=2\n");
+        let expected = r#"[foo]
+a=1
+a=2
+"#;
+        assert_eq!(ini_str, expected);
     }
 
     #[test]
@@ -2628,7 +2632,7 @@ x3 = nb
             vec![
                 ("x2".to_owned(), "nc".to_owned()),
                 ("x1".to_owned(), "na".to_owned()),
-                ("x3".to_owned(), "nb".to_owned())
+                ("x3".to_owned(), "nb".to_owned()),
             ]
         );
     }
