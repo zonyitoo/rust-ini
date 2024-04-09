@@ -2374,7 +2374,11 @@ bar = f
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
-        assert_eq!(ini_str, "[foo]\na=1\na=2\n");
+        let expected = r#"[foo]
+a=1
+a=2
+"#;
+        assert_eq!(ini_str, expected);
     }
 
     #[test]
