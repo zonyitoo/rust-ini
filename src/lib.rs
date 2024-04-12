@@ -365,6 +365,20 @@ impl<'a> SectionSetter<'a> {
         self
     }
 
+    /// Add (append) key-value pair in this section
+    pub fn add<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    where
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.ini
+            .entry(self.section_name.clone())
+            .or_insert_with(Default::default)
+            .append(key, value);
+
+        self
+    }
+
     /// Delete the first entry in this section with `key`
     pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
         for prop in self.ini.section_all_mut(self.section_name.as_ref()) {
@@ -2328,6 +2342,43 @@ bar = f
         assert_eq!(Some("f"), p3.get("bar"));
 
         assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn add_properties_api() {
+        // Test duplicate properties in a section
+        let mut ini = Ini::new();
+        ini.with_section(Some("foo"))
+            .add("a", "1")
+            .add("a", "2");
+
+        let sec = ini.section(Some("foo")).unwrap();
+        assert_eq!(sec.get("a"), Some("1"));
+        assert_eq!(sec.get_all("a").collect::<Vec<&str>>(), vec!["1", "2"]);
+
+        // Test add with unique keys
+        let mut ini = Ini::new();
+        ini.with_section(Some("foo"))
+            .add("a", "1")
+            .add("b", "2");
+
+        let sec = ini.section(Some("foo")).unwrap();
+        assert_eq!(sec.get("a"), Some("1"));
+        assert_eq!(sec.get("b"), Some("2"));
+
+        // Test string representation
+        let mut ini = Ini::new();
+        ini.with_section(Some("foo"))
+            .add("a", "1")
+            .add("a", "2");
+        let mut buf = Vec::new();
+        ini.write_to(&mut buf).unwrap();
+        let ini_str = String::from_utf8(buf).unwrap();
+        if cfg!(windows) {
+            assert_eq!(ini_str, "[foo]\r\na=1\r\na=2\r\n");
+        } else {
+            assert_eq!(ini_str, "[foo]\na=1\na=2\n");
+        }
     }
 
     #[test]
