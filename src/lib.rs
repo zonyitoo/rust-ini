@@ -45,7 +45,7 @@
 use std::{
     borrow::Cow,
     char, error,
-    fmt::{self, Display},
+    fmt::{self, Display, Write as FmtWrite},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     ops::{Index, IndexMut},
@@ -845,6 +845,16 @@ impl Default for Ini {
     }
 }
 
+impl ToString for Ini {
+    fn to_string(&self) -> String {
+        let mut writer = String::new();
+        if let Err(err) = self.write_to_fmt(&mut writer) {
+            panic!("{}", err.to_string());
+        }
+        writer
+    }
+}
+
 impl<S: Into<String>> Index<Option<S>> for Ini {
     type Output = Properties;
 
@@ -938,6 +948,59 @@ impl Ini {
                 } else {
                     // Write an empty line between sections
                     writer.write_all(opt.line_separator.as_str().as_bytes())?;
+                }
+            }
+
+            if let Some(ref section) = *section {
+                write!(
+                    writer,
+                    "[{}]{}",
+                    escape_str(&section[..], opt.escape_policy),
+                    opt.line_separator
+                )?;
+            }
+            for (k, v) in props.iter() {
+                let k_str = escape_str(k, opt.escape_policy);
+                let v_str = escape_str(v, opt.escape_policy);
+                write!(writer, "{}{}{}{}", k_str, opt.kv_separator, v_str, opt.line_separator)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Ini {
+    /// Write to a writer
+    pub fn write_to_fmt<W: FmtWrite>(&self, writer: &mut W) -> Result<(), std::fmt::Error> {
+        self.write_to_opt_fmt(writer, Default::default())
+    }
+
+    /// Write to a writer
+    pub fn write_to_policy_fmt<W: FmtWrite>(
+        &self,
+        writer: &mut W,
+        policy: EscapePolicy,
+    ) -> Result<(), std::fmt::Error> {
+        self.write_to_opt_fmt(
+            writer,
+            WriteOption {
+                escape_policy: policy,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Write to a writer with options
+    pub fn write_to_opt_fmt<W: FmtWrite>(&self, writer: &mut W, opt: WriteOption) -> Result<(), std::fmt::Error> {
+        let mut firstline = true;
+
+        for (section, props) in &self.sections {
+            if !props.data.is_empty() {
+                if firstline {
+                    firstline = false;
+                } else {
+                    // Write an empty line between sections
+                    writer.write_str(opt.line_separator.as_str())?;
                 }
             }
 
@@ -2348,9 +2411,7 @@ bar = f
     fn add_properties_api() {
         // Test duplicate properties in a section
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2358,9 +2419,7 @@ bar = f
 
         // Test add with unique keys
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("b", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("b", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2368,9 +2427,7 @@ bar = f
 
         // Test string representation
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
@@ -2635,5 +2692,23 @@ x3 = nb
                 ("x3".to_owned(), "nb".to_owned())
             ]
         );
+    }
+
+    #[test]
+    fn to_string_works() {
+        let input = r"
+x2 = nc
+x1 = na
+x3 = nb
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let exp = r"x2=nc
+x1=na
+x3=nb
+";
+        assert_eq!(data.to_string(), exp);
+        let mut my_str = String::new();
+        let _ = data.write_to_fmt(&mut my_str);
+        assert_eq!(my_str, exp);
     }
 }
