@@ -2702,7 +2702,10 @@ x1 = na
 x3 = nb
 ";
         let data = Ini::load_from_str(input).unwrap();
-        let exp = "x2=nc\nx1=na\nx3=nb\n";
+        let exp = r"x2=nc
+x1=na
+x3=nb
+";
         assert_eq!(data.to_string(), exp);
         let mut my_str = String::new();
         let _ = data.write_to_fmt(&mut my_str);
