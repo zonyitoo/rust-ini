@@ -44,7 +44,8 @@
 
 use std::{
     borrow::Cow,
-    char, error,
+    char,
+    error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -214,6 +215,15 @@ pub struct ParseOption {
     ///
     /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
     pub enabled_escape: bool,
+
+    /// Allow ':' as delimiter as key value pair
+    /// For example
+    /// ```ini
+    /// //url:password=123
+    /// ```
+    /// If `colon_delimiter` is true, then the key is `//url` and the value is `password=123`
+    /// otherwise, the key is `//url:password` and the value is `123`
+    pub colon_delimiter: bool,
 }
 
 impl Default for ParseOption {
@@ -221,6 +231,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
+            colon_delimiter: false,
         }
     }
 }
@@ -1498,7 +1509,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('='), Some(':')], false)
+        let endpoint: &[Option<char>] = if self.opt.colon_delimiter {
+            &[Some('='), Some(':')]
+        } else {
+            &[Some('=')]
+        };
+
+        self.parse_str_until(endpoint, false)
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1794,7 +1811,10 @@ gender = mail ; abdddd
 name: hello
 gender : mail
 ";
-        let ini = Ini::load_from_str(input).unwrap();
+        let mut parse_option = ParseOption::default();
+        parse_option.colon_delimiter = true;
+        let ini = Ini::load_from_str_opt(input, parse_option).unwrap();
+
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
         assert_eq!(ini.get_from(Some("section name"), "gender").unwrap(), "mail");
     }
@@ -2152,6 +2172,38 @@ a3 = n3
     }
 
     #[test]
+    fn parse_npmrc() {
+        let input = r"
+@myorg:registry=https://somewhere-else.com/myorg
+@another:registry=https://somewhere-else.com/another
+//registry.npmjs.org/:_authToken=MYTOKEN
+; would apply to both @myorg and @another
+//somewhere-else.com/:_authToken=MYTOKEN
+; would apply only to @myorg
+//somewhere-else.com/myorg/:_authToken=MYTOKEN1
+; would apply only to @another
+//somewhere-else.com/another/:_authToken=MYTOKEN2
+    ";
+        let mut parse_option = ParseOption::default();
+        parse_option.colon_delimiter = false;
+        let data = Ini::load_from_str_opt(input, parse_option).unwrap();
+        let (_, section) = data.into_iter().next().unwrap();
+        let props: Vec<_> = section.iter().collect();
+
+        assert_eq!(
+            props,
+            vec![
+                ("@myorg:registry", "https://somewhere-else.com/myorg"),
+                ("@another:registry", "https://somewhere-else.com/another"),
+                ("//registry.npmjs.org/:_authToken", "MYTOKEN"),
+                ("//somewhere-else.com/:_authToken", "MYTOKEN"),
+                ("//somewhere-else.com/myorg/:_authToken", "MYTOKEN1"),
+                ("//somewhere-else.com/another/:_authToken", "MYTOKEN2")
+            ]
+        );
+    }
+
+    #[test]
     fn preserve_order_write() {
         let input = r"
 x2 = n2
@@ -2348,9 +2400,7 @@ bar = f
     fn add_properties_api() {
         // Test duplicate properties in a section
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2358,9 +2408,7 @@ bar = f
 
         // Test add with unique keys
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("b", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("b", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2368,9 +2416,7 @@ bar = f
 
         // Test string representation
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
