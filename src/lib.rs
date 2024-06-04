@@ -192,7 +192,7 @@ fn escape_str(s: &str, policy: EscapePolicy) -> String {
 }
 
 /// Parsing configuration
-pub struct ParseOption {
+pub struct ParseOption<const N: usize> {
     /// Allow quote (`"` or `'`) in value
     /// For example
     /// ```ini
@@ -216,24 +216,43 @@ pub struct ParseOption {
     /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
     pub enabled_escape: bool,
 
-    /// Allow ':' as delimiter as key value pair
+    /// Declare the characters as delimiter of key value pair
+    ///
+    /// Default is vec!['=']. And it's undefined behavior if it's empty.
+    ///
     /// For example
     /// ```ini
     /// //url:password=123
     /// ```
-    /// If `colon_delimiter` is true, then the key is `//url` and the value is `password=123`
-    /// otherwise, the key is `//url:password` and the value is `123`
-    pub colon_delimiter: bool,
+    ///
+    /// If `key_value_delimiter` is vec!['='], then the key is `//url` and the value is `password=123`
+    /// If `key_value_delimiter` is vec![':', '='], the key is `//url:password` and the value is `123`
+    pub key_value_delimiter: [char; N],
 }
 
-impl Default for ParseOption {
-    fn default() -> ParseOption {
+impl Default for ParseOption<1> {
+    fn default() -> ParseOption<1> {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
-            colon_delimiter: false,
+            key_value_delimiter: ['='],
         }
     }
+}
+
+/// This type is basically like ParseOption, with some minimal changes to make parser more efficient.
+struct ParseOptionInner<const N: usize> {
+    /// Refer [ParseOption::enabled_quote]
+    pub enabled_quote: bool,
+
+    /// Refer [ParseOption::enabled_escape]
+    pub enabled_escape: bool,
+
+    /// Refer [ParseOption::key_value_delimiter]
+    ///
+    /// This filed wrap inner value with Option, which is required by inner function parse_str_until. So that we do not need to
+    /// convert again and again.
+    pub key_value_delimiter: [Option<char>; N],
 }
 
 /// Newline style
@@ -988,7 +1007,7 @@ impl Ini {
     }
 
     /// Load from a string with options
-    pub fn load_from_str_opt(buf: &str, opt: ParseOption) -> Result<Ini, ParseError> {
+    pub fn load_from_str_opt<const N: usize>(buf: &str, opt: ParseOption<N>) -> Result<Ini, ParseError> {
         let mut parser = Parser::new(buf.chars(), opt);
         parser.parse()
     }
@@ -1010,7 +1029,7 @@ impl Ini {
     }
 
     /// Load from a reader with options
-    pub fn read_from_opt<R: Read>(reader: &mut R, opt: ParseOption) -> Result<Ini, Error> {
+    pub fn read_from_opt<R: Read, const N: usize>(reader: &mut R, opt: ParseOption<N>) -> Result<Ini, Error> {
         let mut s = String::new();
         reader.read_to_string(&mut s).map_err(Error::Io)?;
         let mut parser = Parser::new(s.chars(), opt);
@@ -1037,7 +1056,7 @@ impl Ini {
     }
 
     /// Load from a file with options
-    pub fn load_from_file_opt<P: AsRef<Path>>(filename: P, opt: ParseOption) -> Result<Ini, Error> {
+    pub fn load_from_file_opt<P: AsRef<Path>, const N: usize>(filename: P, opt: ParseOption<N>) -> Result<Ini, Error> {
         let mut reader = match File::open(filename.as_ref()) {
             Err(e) => {
                 return Err(Error::Io(e));
@@ -1184,12 +1203,12 @@ impl IntoIterator for Ini {
 }
 
 // Ini parser
-struct Parser<'a> {
+struct Parser<'a, const N: usize> {
     ch: Option<char>,
     rdr: Chars<'a>,
     line: usize,
     col: usize,
-    opt: ParseOption,
+    opt: ParseOptionInner<N>,
 }
 
 #[derive(Debug)]
@@ -1239,15 +1258,21 @@ impl From<io::Error> for Error {
     }
 }
 
-impl<'a> Parser<'a> {
+impl<'a, const N: usize> Parser<'a, N> {
     // Create a parser
-    pub fn new(rdr: Chars<'a>, opt: ParseOption) -> Parser<'a> {
+    pub fn new(rdr: Chars<'a>, opt: ParseOption<N>) -> Parser<'a, N> {
+        let opt_inner = ParseOptionInner {
+            enabled_escape: opt.enabled_escape,
+            enabled_quote: opt.enabled_quote,
+            key_value_delimiter: opt.key_value_delimiter.map(|it| Some(it)),
+        };
+
         let mut p = Parser {
             ch: None,
             line: 0,
             col: 0,
             rdr,
-            opt,
+            opt: opt_inner,
         };
         p.bump();
         p
@@ -1509,13 +1534,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
-        let endpoint: &[Option<char>] = if self.opt.colon_delimiter {
-            &[Some('='), Some(':')]
-        } else {
-            &[Some('=')]
-        };
-
-        self.parse_str_until(endpoint, false)
+        self.parse_str_until(&self.opt.key_value_delimiter.clone(), false)
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1811,8 +1830,12 @@ gender = mail ; abdddd
 name: hello
 gender : mail
 ";
-        let mut parse_option = ParseOption::default();
-        parse_option.colon_delimiter = true;
+        let parse_option: ParseOption<2> = ParseOption {
+            enabled_escape: true,
+            enabled_quote: true,
+            key_value_delimiter: ['=', ':'],
+        };
+
         let ini = Ini::load_from_str_opt(input, parse_option).unwrap();
 
         assert_eq!(ini.get_from(Some("section name"), "name").unwrap(), "hello");
@@ -2184,8 +2207,8 @@ a3 = n3
 ; would apply only to @another
 //somewhere-else.com/another/:_authToken=MYTOKEN2
     ";
-        let mut parse_option = ParseOption::default();
-        parse_option.colon_delimiter = false;
+        let parse_option = ParseOption::default();
+
         let data = Ini::load_from_str_opt(input, parse_option).unwrap();
         let (_, section) = data.into_iter().next().unwrap();
         let props: Vec<_> = section.iter().collect();
