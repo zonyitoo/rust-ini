@@ -352,10 +352,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Set (replace) key-value pair in this section (all with the same name)
-    pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    pub fn set<'b, K, V>(&'b mut self, key: K, value: V) -> &'b mut SectionSetter<'a>
     where
         K: Into<String>,
         V: Into<String>,
+        'a: 'b,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -366,10 +367,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Add (append) key-value pair in this section
-    pub fn add<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    pub fn add<'b, K, V>(&'b mut self, key: K, value: V) -> &'b mut SectionSetter<'a>
     where
         K: Into<String>,
         V: Into<String>,
+        'a: 'b,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -380,7 +382,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Delete the first entry in this section with `key`
-    pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
+    pub fn delete<'b, K>(&'b mut self, key: &K) -> &'b mut SectionSetter<'a>
+    where
+        K: AsRef<str>,
+        'a: 'b,
+    {
         for prop in self.ini.section_all_mut(self.section_name.as_ref()) {
             prop.remove(key);
         }
@@ -389,7 +395,7 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Get the entry in this section with `key`
-    pub fn get<K: AsRef<str>>(&'a mut self, key: K) -> Option<&'a str> {
+    pub fn get<K: AsRef<str>>(&'a self, key: K) -> Option<&'a str> {
         self.ini
             .section(self.section_name.as_ref())
             .and_then(|prop| prop.get(key))
@@ -2348,9 +2354,7 @@ bar = f
     fn add_properties_api() {
         // Test duplicate properties in a section
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2358,9 +2362,7 @@ bar = f
 
         // Test add with unique keys
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("b", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("b", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2368,9 +2370,7 @@ bar = f
 
         // Test string representation
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
@@ -2635,5 +2635,38 @@ x3 = nb
                 ("x3".to_owned(), "nb".to_owned())
             ]
         );
+    }
+
+    #[test]
+    fn section_setter_chain() {
+        // fix issue #134
+
+        let mut ini = Ini::new();
+        let mut section_setter = ini.with_section(Some("section"));
+
+        // chained set() calls work
+        section_setter.set("a", "1").set("b", "2");
+        // separate set() calls work
+        section_setter.set("c", "3");
+
+        assert_eq!("1", section_setter.get("a").unwrap());
+        assert_eq!("2", section_setter.get("b").unwrap());
+        assert_eq!("3", section_setter.get("c").unwrap());
+
+        // overwrite values
+        section_setter.set("a", "4").set("b", "5");
+        section_setter.set("c", "6");
+
+        assert_eq!("4", section_setter.get("a").unwrap());
+        assert_eq!("5", section_setter.get("b").unwrap());
+        assert_eq!("6", section_setter.get("c").unwrap());
+
+        // delete entries
+        section_setter.delete(&"a").delete(&"b");
+        section_setter.delete(&"c");
+
+        assert!(section_setter.get("a").is_none());
+        assert!(section_setter.get("b").is_none());
+        assert!(section_setter.get("c").is_none());
     }
 }
