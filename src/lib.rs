@@ -2348,9 +2348,7 @@ bar = f
     fn add_properties_api() {
         // Test duplicate properties in a section
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2358,9 +2356,7 @@ bar = f
 
         // Test add with unique keys
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("b", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("b", "2");
 
         let sec = ini.section(Some("foo")).unwrap();
         assert_eq!(sec.get("a"), Some("1"));
@@ -2368,9 +2364,7 @@ bar = f
 
         // Test string representation
         let mut ini = Ini::new();
-        ini.with_section(Some("foo"))
-            .add("a", "1")
-            .add("a", "2");
+        ini.with_section(Some("foo")).add("a", "1").add("a", "2");
         let mut buf = Vec::new();
         ini.write_to(&mut buf).unwrap();
         let ini_str = String::from_utf8(buf).unwrap();
