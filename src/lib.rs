@@ -389,7 +389,7 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Get the entry in this section with `key`
-    pub fn get<K: AsRef<str>>(&'a mut self, key: K) -> Option<&'a str> {
+    pub fn get<K: AsRef<str>>(&'a self, key: K) -> Option<&'a str> {
         self.ini
             .section(self.section_name.as_ref())
             .and_then(|prop| prop.get(key))
