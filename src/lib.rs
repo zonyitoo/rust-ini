@@ -2636,4 +2636,37 @@ x3 = nb
             ]
         );
     }
+
+    #[test]
+    fn section_setter_chain() {
+        // fix issue #134
+
+        let mut ini = Ini::new();
+        let mut section_setter = ini.with_section(Some("section"));
+
+        // chained set() calls work
+        section_setter.set("a", "1").set("b", "2");
+        // separate set() calls work
+        section_setter.set("c", "3");
+
+        assert_eq!("1", section_setter.get("a").unwrap());
+        assert_eq!("2", section_setter.get("b").unwrap());
+        assert_eq!("3", section_setter.get("c").unwrap());
+
+        // overwrite values
+        section_setter.set("a", "4").set("b", "5");
+        section_setter.set("c", "6");
+
+        assert_eq!("4", section_setter.get("a").unwrap());
+        assert_eq!("5", section_setter.get("b").unwrap());
+        assert_eq!("6", section_setter.get("c").unwrap());
+
+        // delete entries
+        section_setter.delete(&"a").delete(&"b");
+        section_setter.delete(&"c");
+
+        assert!(section_setter.get("a").is_none());
+        assert!(section_setter.get("b").is_none());
+        assert!(section_setter.get("c").is_none());
+    }
 }
