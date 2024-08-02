@@ -352,10 +352,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Set (replace) key-value pair in this section (all with the same name)
-    pub fn set<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    pub fn set<'b, K, V>(&'b mut self, key: K, value: V) -> &'b mut SectionSetter<'a>
     where
         K: Into<String>,
         V: Into<String>,
+        'a: 'b,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -366,10 +367,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Add (append) key-value pair in this section
-    pub fn add<K, V>(&'a mut self, key: K, value: V) -> &'a mut SectionSetter<'a>
+    pub fn add<'b, K, V>(&'b mut self, key: K, value: V) -> &'b mut SectionSetter<'a>
     where
         K: Into<String>,
         V: Into<String>,
+        'a: 'b,
     {
         self.ini
             .entry(self.section_name.clone())
@@ -380,7 +382,11 @@ impl<'a> SectionSetter<'a> {
     }
 
     /// Delete the first entry in this section with `key`
-    pub fn delete<K: AsRef<str>>(&'a mut self, key: &K) -> &'a mut SectionSetter<'a> {
+    pub fn delete<'b, K>(&'b mut self, key: &K) -> &'b mut SectionSetter<'a>
+    where
+        K: AsRef<str>,
+        'a: 'b,
+    {
         for prop in self.ini.section_all_mut(self.section_name.as_ref()) {
             prop.remove(key);
         }
