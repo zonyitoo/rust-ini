@@ -214,6 +214,17 @@ pub struct ParseOption {
     ///
     /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
     pub enabled_escape: bool,
+
+    /// Don't allow a key which contains no value
+    /// For example
+    /// ```ini
+    /// [Section]
+    /// Key1
+    /// Key2=C:\Windows
+    /// ```
+    /// 
+    /// If `dont_allow_no_value` is true, then the given ini file is not valid.
+    pub dont_allow_no_value: bool,
 }
 
 impl Default for ParseOption {
@@ -221,6 +232,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
+            dont_allow_no_value: true,
         }
     }
 }
@@ -1504,7 +1516,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_key(&mut self) -> Result<String, ParseError> {
-        self.parse_str_until(&[Some('='), Some(':')], false)
+        let key = self.parse_str_until(&[Some('='), Some(':'), Some('\n')], false)?;
+        if self.opt.dont_allow_no_value && self.ch == Some('\n') {
+            return self.error("Value is missing");
+        } else {
+            Ok(key)
+        }
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1707,6 +1724,13 @@ mod test {
         let input = "[sec1]\nkey1=val1\nkey2=377\n[sec2]\nfoo=bar";
         let opt = Ini::load_from_str(input);
         assert!(opt.is_ok());
+    }
+
+    #[test]
+    fn parse_when_value_missing() {
+        let invalid_input = "[sec1]\nkey1\nkey2=377";
+        let ini = Ini::load_from_str(invalid_input);
+        assert!(ini.is_err())
     }
 
     #[test]
