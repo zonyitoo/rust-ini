@@ -1391,72 +1391,97 @@ impl<'a> Parser<'a> {
     fn parse_str_until(&mut self, endpoint: &[Option<char>], check_inline_comment: bool) -> Result<String, ParseError> {
         let mut result: String = String::new();
 
+        let mut in_line_continuation = false;
+
         while !endpoint.contains(&self.ch) {
             match self.char_or_eof(endpoint)? {
                 #[cfg(feature = "inline-comment")]
-                space if check_inline_comment && (space == ' ' || space == '\t') => {
+                ch if check_inline_comment && (ch == ' ' || ch == '\t') => {
                     self.bump();
 
                     match self.ch {
                         Some('#') | Some(';') => {
                             // [space]#, [space]; starts an inline comment
-                            break;
+                            self.parse_comment();
+                            if in_line_continuation {
+                                result.push(ch);
+                                continue;
+                            } else {
+                                break;
+                            }
                         }
                         Some(_) => {
-                            result.push(space);
+                            result.push(ch);
                             continue;
                         }
                         None => {
-                            result.push(space);
+                            result.push(ch);
                         }
                     }
                 }
-                '\\' if self.opt.enabled_escape => {
+                #[cfg(feature = "inline-comment")]
+                ch if check_inline_comment && in_line_continuation && (ch == '#' || ch == ';') => {
+                    self.parse_comment();
+                    continue;
+                }
+                '\\' => {
                     self.bump();
-                    match self.char_or_eof(endpoint)? {
-                        '0' => result.push('\0'),
-                        'a' => result.push('\x07'),
-                        'b' => result.push('\x08'),
-                        't' => result.push('\t'),
-                        'r' => result.push('\r'),
-                        'n' => result.push('\n'),
-                        '\n' => (),
-                        'x' => {
-                            // Unicode 4 character
-                            let mut code: String = String::with_capacity(4);
-                            for _ in 0..4 {
-                                self.bump();
-                                let ch = self.char_or_eof(endpoint)?;
-                                if ch == '\\' {
-                                    self.bump();
-                                    if self.ch != Some('\n') {
-                                        return self.error(format!(
-                                            "expecting \"\\\\n\" but \
-                                             found \"{:?}\".",
-                                            self.ch
-                                        ));
-                                    }
-                                }
+                    let Some(ch) = self.ch else {
+                        result.push('\\');
+                        continue;
+                    };
 
-                                code.push(ch);
+                    if matches!(ch, '\n') {
+                        in_line_continuation = true;
+                    } else if self.opt.enabled_escape {
+                        match ch {
+                            '0' => result.push('\0'),
+                            'a' => result.push('\x07'),
+                            'b' => result.push('\x08'),
+                            't' => result.push('\t'),
+                            'r' => result.push('\r'),
+                            'n' => result.push('\n'),
+                            '\n' => self.bump(),
+                            'x' => {
+                                // Unicode 4 character
+                                let mut code: String = String::with_capacity(4);
+                                for _ in 0..4 {
+                                    self.bump();
+                                    let ch = self.char_or_eof(endpoint)?;
+                                    if ch == '\\' {
+                                        self.bump();
+                                        if self.ch != Some('\n') {
+                                            return self.error(format!(
+                                                "expecting \"\\\\n\" but \
+                                             found \"{:?}\".",
+                                                self.ch
+                                            ));
+                                        }
+                                    }
+
+                                    code.push(ch);
+                                }
+                                let r = u32::from_str_radix(&code[..], 16);
+                                match r.ok().and_then(char::from_u32) {
+                                    Some(ch) => result.push(ch),
+                                    None => return self.error("unknown character in \\xHH form"),
+                                }
                             }
-                            let r = u32::from_str_radix(&code[..], 16);
-                            match r.ok().and_then(char::from_u32) {
-                                Some(ch) => result.push(ch),
-                                None => return self.error("unknown character in \\xHH form"),
-                            }
+                            c => result.push(c),
                         }
-                        c => result.push(c),
+                    } else {
+                        result.push('\\');
+                        result.push(ch);
                     }
                 }
-                ch => {
-                    result.push(ch);
-                }
+                ch => result.push(ch),
             }
             self.bump();
         }
 
         let _ = check_inline_comment;
+        let _ = in_line_continuation;
+
         Ok(result)
     }
 
@@ -1539,11 +1564,6 @@ impl<'a> Parser<'a> {
     #[inline]
     fn parse_str_until_eol(&mut self, check_inline_comment: bool) -> Result<String, ParseError> {
         let r = self.parse_str_until(&[Some('\n'), Some('\r'), None], check_inline_comment)?;
-
-        #[cfg(feature = "inline-comment")]
-        if check_inline_comment && matches!(self.ch, Some('#') | Some(';')) {
-            self.parse_comment();
-        }
 
         Ok(r)
     }
@@ -1829,6 +1849,48 @@ Otherline\"
     }
 
     #[test]
+    fn string_multiline_escape() {
+        let input = r"
+[section name]
+# This is a comment
+Key = Value \
+Otherline
+";
+        let ini = Ini::load_from_str_opt(
+            input,
+            ParseOption {
+                enabled_escape: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value Otherline");
+    }
+
+    #[cfg(feature = "inline-comment")]
+    #[test]
+    fn string_multiline_inline_comment() {
+        let input = r"
+[section name]
+# This is a comment
+Key = Value \
+# This is also a comment
+; This is also a comment
+   # This is also a comment
+Otherline
+";
+        let ini = Ini::load_from_str_opt(
+            input,
+            ParseOption {
+                enabled_escape: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value    Otherline");
+    }
+
+    #[test]
     fn string_comment() {
         let input = "
 [section name]
@@ -2035,10 +2097,7 @@ Key = 'Value   # This is not a comment ; at all'
     #[test]
     fn load_from_str_noescape() {
         let input = "path=C:\\Windows\\Some\\Folder\\";
-        let opt = Ini::load_from_str_noescape(input);
-        assert!(opt.is_ok());
-
-        let output = opt.unwrap();
+        let output = Ini::load_from_str_noescape(input).unwrap();
         assert_eq!(output.len(), 1);
         let sec = output.section(None::<String>).unwrap();
         assert_eq!(sec.len(), 1);
