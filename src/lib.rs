@@ -214,6 +214,13 @@ pub struct ParseOption {
     ///
     /// If `enabled_escape` is true, then the value of `Key` will become `C:Windows` (`\W` equals to `W`).
     pub enabled_escape: bool,
+
+    /// Enables values that span lines
+    /// ```ini
+    /// [Section]
+    /// Key1=C:\Windows
+    /// ```
+    pub indented_multiline_values: bool,
 }
 
 impl Default for ParseOption {
@@ -221,6 +228,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
+            indented_multiline_values: false,
         }
     }
 }
@@ -1537,7 +1545,7 @@ impl<'a> Parser<'a> {
         // Issue #35: Allow empty value
         self.parse_whitespace_except_line_break();
 
-        match self.ch {
+        let mut val = match self.ch {
             None => Ok(String::new()),
             Some('"') if self.opt.enabled_quote => {
                 self.bump();
@@ -1558,7 +1566,27 @@ impl<'a> Parser<'a> {
                 })
             }
             _ => self.parse_str_until_eol(cfg!(feature = "inline-comment")),
+        }?;
+        if self.opt.indented_multiline_values {
+            loop {
+                self.bump();
+                match self.ch {
+                    Some(' ' | '\t') => {
+                        self.parse_whitespace_except_line_break();
+                        val.push('\n');
+                        let mut new = self.parse_str_until_eol(cfg!(feature = "inline-comment"))?;
+                        new.trim_in_place();
+                        val.push_str(&new)
+                    }
+                    Some('\n') => {
+                        val.push('\n');
+                        continue
+                    }
+                    _ => break,
+                }
+            }
         }
+        Ok(val)
     }
 
     #[inline]
@@ -2727,5 +2755,44 @@ x3 = nb
         assert!(section_setter.get("a").is_none());
         assert!(section_setter.get("b").is_none());
         assert!(section_setter.get("c").is_none());
+    }
+
+    #[test]
+    fn parse_indented_multiline_values() {
+        let input = "
+[Foo]
+bar =
+    u
+    v
+
+baz = w
+  x # intentional trailing whitespace below
+   y 
+
+ z #2
+bla = a
+";
+
+        let opt = Ini::load_from_str_opt(
+            input,
+            ParseOption {
+                indented_multiline_values: true,
+                ..ParseOption::default()
+            },
+        )
+        .unwrap();
+        let sec = opt.section(Some("Foo")).unwrap();
+        let mut iterator = sec.iter();
+        let bar = iterator.next().unwrap().1;
+        let baz = iterator.next().unwrap().1;
+        let bla = iterator.next().unwrap().1;
+        assert!(iterator.next().is_none());
+        assert_eq!(bar, "u\nv");
+        if cfg!(feature = "inline-comment") {
+            assert_eq!(baz, "w\nx\ny\n\nz");
+        } else {
+            assert_eq!(baz, "w\nx # intentional trailing whitespace below\ny\n\nz #2");
+        }
+        assert_eq!(bla, "a");
     }
 }
