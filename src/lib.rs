@@ -1057,6 +1057,32 @@ impl Ini {
         Ok(merged)
     }
 
+    #[cfg(not(feature = "case-insensitive"))]
+    pub fn load_from_files<P: AsRef<Path>>(filenames: &Vec<P>) -> Result<Ini, Error> {
+        let mut merged = Ini::new();
+        let mut section_2_props: HashMap<Option<String>, Properties> = HashMap::new();
+        for filename in filenames {
+            match Ini::load_from_file(filename) {
+                Ok(ini) => {
+                    for (section, props) in ini.sections {
+                        if let Some(section_props) = section_2_props.get_mut(&section) {
+                            for (key, value) in props {
+                                section_props.insert(key, value);
+                            }
+                        } else {
+                            section_2_props.insert(section, props);
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        for (section, props) in section_2_props {
+            merged.sections.insert(section, props);
+        }
+        Ok(merged)
+    }
+
     /// Load from a file, but do not interpret '\' as an escape character
     pub fn load_from_file_noescape<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
         Ini::load_from_file_opt(
@@ -2826,7 +2852,6 @@ bla = a
     }
 
     #[test]
-    #[cfg(feature = "case-insensitive")]
     fn test_load_from_files() {
         //Test both overwrite and append
 
