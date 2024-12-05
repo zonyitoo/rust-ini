@@ -44,14 +44,15 @@
 
 use std::{
     borrow::Cow,
-    char, error,
+    char,
+    collections::HashMap,
+    error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     ops::{Index, IndexMut},
     path::Path,
     str::Chars,
-    collections::HashMap,
 };
 
 use cfg_if::cfg_if;
@@ -1030,10 +1031,10 @@ impl Ini {
     }
 
     /// Load from files;overwrite and append
-    pub fn load_from_files<P: AsRef<Path>>(filenames: Vec<P>) -> Result<Ini, Error> {
+    pub fn load_from_files<P: AsRef<Path>>(filenames: &Vec<P>) -> Result<Ini, Error> {
         let mut merged = Ini::new();
-        let mut section_2_props:HashMap<Option<String>, Properties> = HashMap::new();
-        for filename in filenames{
+        let mut section_2_props: HashMap<Option<String>, Properties> = HashMap::new();
+        for filename in filenames {
             match Ini::load_from_file(filename) {
                 Ok(ini) => {
                     for (section, props) in ini.sections {
@@ -1053,9 +1054,7 @@ impl Ini {
             merged.sections.insert(section, props);
         }
         Ok(merged)
-        //Ini::load_from_file_opt(filename, ParseOption::default())
     }
-
 
     /// Load from a file, but do not interpret '\' as an escape character
     pub fn load_from_file_noescape<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
@@ -1609,7 +1608,7 @@ impl<'a> Parser<'a> {
                     }
                     Some('\n') => {
                         val.push('\n');
-                        continue
+                        continue;
                     }
                     _ => break,
                 }
@@ -2846,9 +2845,9 @@ bla = a
             file.write_all(file_content2.as_bytes()).expect("write");
         }
 
-        let ini = Ini::load_from_files(vec![&file_name1, &file_name2]).unwrap();
+        let inifiles = vec![&file_name1,&file_name2];
+        let ini = Ini::load_from_files(&inifiles).unwrap();
         assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value2"));
         assert_eq!(ini.get_from(Some("Test"), "Key2"), Some("Value3"));
     }
-
 }
