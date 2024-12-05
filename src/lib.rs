@@ -44,7 +44,9 @@
 
 use std::{
     borrow::Cow,
-    char, error,
+    char,
+    collections::HashMap,
+    error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -1028,6 +1030,59 @@ impl Ini {
         Ini::load_from_file_opt(filename, ParseOption::default())
     }
 
+    /// Load from files;overwrite and append
+    #[cfg(feature = "case-insensitive")]
+    pub fn load_from_files<P: AsRef<Path>>(filenames: &Vec<P>) -> Result<Ini, Error> {
+        let mut merged = Ini::new();
+        let mut section_2_props: HashMap<Option<UniCase<String>>, Properties> = HashMap::new();
+        for filename in filenames {
+            match Ini::load_from_file(filename) {
+                Ok(ini) => {
+                    for (section, props) in ini.sections {
+                        if let Some(section_props) = section_2_props.get_mut(&section) {
+                            for (key, value) in props {
+                                section_props.insert(key, value);
+                            }
+                        } else {
+                            section_2_props.insert(section, props);
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        for (section, props) in section_2_props {
+            merged.sections.insert(section, props);
+        }
+        Ok(merged)
+    }
+
+    #[cfg(not(feature = "case-insensitive"))]
+    pub fn load_from_files<P: AsRef<Path>>(filenames: &Vec<P>) -> Result<Ini, Error> {
+        let mut merged = Ini::new();
+        let mut section_2_props: HashMap<Option<String>, Properties> = HashMap::new();
+        for filename in filenames {
+            match Ini::load_from_file(filename) {
+                Ok(ini) => {
+                    for (section, props) in ini.sections {
+                        if let Some(section_props) = section_2_props.get_mut(&section) {
+                            for (key, value) in props {
+                                section_props.insert(key, value);
+                            }
+                        } else {
+                            section_2_props.insert(section, props);
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        for (section, props) in section_2_props {
+            merged.sections.insert(section, props);
+        }
+        Ok(merged)
+    }
+
     /// Load from a file, but do not interpret '\' as an escape character
     pub fn load_from_file_noescape<P: AsRef<Path>>(filename: P) -> Result<Ini, Error> {
         Ini::load_from_file_opt(
@@ -1580,7 +1635,7 @@ impl<'a> Parser<'a> {
                     }
                     Some('\n') => {
                         val.push('\n');
-                        continue
+                        continue;
                     }
                     _ => break,
                 }
@@ -2794,5 +2849,32 @@ bla = a
             assert_eq!(baz, "w\nx # intentional trailing whitespace below\ny\n\nz #2");
         }
         assert_eq!(bla, "a");
+    }
+
+    #[test]
+    fn test_load_from_files() {
+        //Test both overwrite and append
+
+        use std::vec;
+        let file_name1 = temp_dir().join("rust_ini_load_xxx1");
+        let file_content1 = "[Test]Key=Value\n";
+
+        {
+            let mut file = File::create(&file_name1).expect("create");
+            file.write_all(file_content1.as_bytes()).expect("write");
+        }
+
+        let file_name2 = temp_dir().join("rust_ini_load_xxx2");
+        let file_content2 = "[Test]Key=Value2\nKey2=Value3\n";
+
+        {
+            let mut file = File::create(&file_name2).expect("create");
+            file.write_all(file_content2.as_bytes()).expect("write");
+        }
+
+        let inifiles = vec![&file_name1, &file_name2];
+        let ini = Ini::load_from_files(&inifiles).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value2"));
+        assert_eq!(ini.get_from(Some("Test"), "Key2"), Some("Value3"));
     }
 }
