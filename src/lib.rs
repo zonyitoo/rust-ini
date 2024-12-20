@@ -1356,8 +1356,7 @@ impl<'a> Parser<'a> {
                         return self.error("missing key");
                     }
                     match self.parse_val() {
-                        Ok(mut mval) => {
-                            mval.trim_in_place();
+                        Ok(mval) => {
                             match result.entry(cursec.clone()) {
                                 SectionEntry::Vacant(v) => {
                                     // cursec must be None (the General Section)
@@ -1548,47 +1547,112 @@ impl<'a> Parser<'a> {
         // Issue #35: Allow empty value
         self.parse_whitespace_except_line_break();
 
-        let mut val = match self.ch {
-            None => Ok(String::new()),
-            Some('"') if self.opt.enabled_quote => {
-                self.bump();
-                self.parse_str_until(&[Some('"')], false).and_then(|s| {
-                    self.bump(); // Eats the last "
-                                 // Parse until EOL
-                    self.parse_str_until_eol(cfg!(feature = "inline-comment"))
-                        .map(|x| s + &x)
-                })
-            }
-            Some('\'') if self.opt.enabled_quote => {
-                self.bump();
-                self.parse_str_until(&[Some('\'')], false).and_then(|s| {
-                    self.bump(); // Eats the last '
-                                 // Parse until EOL
-                    self.parse_str_until_eol(cfg!(feature = "inline-comment"))
-                        .map(|x| s + &x)
-                })
-            }
-            _ => self.parse_str_until_eol(cfg!(feature = "inline-comment")),
-        }?;
-        if self.opt.enabled_indented_mutiline_value {
-            loop {
-                self.bump();
-                match self.ch {
-                    Some(' ' | '\t') => {
-                        self.parse_whitespace_except_line_break();
-                        val.push('\n');
-                        let mut new = self.parse_str_until_eol(cfg!(feature = "inline-comment"))?;
-                        new.trim_in_place();
-                        val.push_str(&new)
+        let mut val = String::new();
+        let mut val_first_part = true;
+        // Parse the first line of value
+        'parse_value_line_loop: loop {
+            match self.ch {
+                // EOF. Just break
+                None => break,
+
+                // Double Quoted
+                Some('"') if self.opt.enabled_quote => {
+                    // Bump the current "
+                    self.bump();
+                    // Parse until the next "
+                    let quoted_val = self.parse_str_until(&[Some('"')], false)?;
+                    val.push_str(&quoted_val);
+
+                    // Eats the "
+                    self.bump();
+
+                    // characters after " are still part of the value line
+                    val_first_part = false;
+                    continue;
+                }
+
+                // Single Quoted
+                Some('\'') if self.opt.enabled_quote => {
+                    // Bump the current '
+                    self.bump();
+                    // Parse until the next '
+                    let quoted_val = self.parse_str_until(&[Some('\'')], false)?;
+                    val.push_str(&quoted_val);
+
+                    // Eats the '
+                    self.bump();
+
+                    // characters after ' are still part of the value line
+                    val_first_part = false;
+                    continue;
+                }
+
+                // Standard value string
+                _ => {
+                    // Parse until EOL. White spaces are trimmed (both start and end)
+                    let standard_val = self.parse_str_until_eol(cfg!(feature = "inline-comment"))?;
+
+                    let trimmed_value = if val_first_part {
+                        // If it is the first part of the value, just trim all of them
+                        standard_val.trim()
+                    } else {
+                        // Otherwise, trim the ends
+                        standard_val.trim_end()
+                    };
+                    val_first_part = false;
+
+                    val.push_str(trimmed_value);
+
+                    if self.opt.enabled_indented_mutiline_value {
+                        // Multiline value is supported. We now check whether the next line is started with ' ' or '\t'.
+                        self.bump();
+
+                        loop {
+                            match self.ch {
+                                Some(' ') | Some('\t') => {
+                                    // Multiline value
+                                    // Eats the leading spaces
+                                    self.parse_whitespace_except_line_break();
+                                    // Push a line-break to the current value
+                                    val.push('\n');
+                                    // continue. Let read the whole value line
+                                    continue 'parse_value_line_loop;
+                                }
+
+                                Some('\r') => {
+                                    // Probably \r\n, try to eat one more
+                                    self.bump();
+                                    if self.ch == Some('\n') {
+                                        self.bump();
+                                        val.push('\n');
+                                    } else {
+                                        // \r with a character?
+                                        return self.error("\\r is not followed by \\n");
+                                    }
+                                }
+
+                                Some('\n') => {
+                                    // New-line, just push and continue
+                                    self.bump();
+                                    val.push('\n');
+                                }
+
+                                // Not part of the multiline value
+                                _ => break 'parse_value_line_loop,
+                            }
+                        }
+                    } else {
+                        break;
                     }
-                    Some('\n') => {
-                        val.push('\n');
-                        continue;
-                    }
-                    _ => break,
                 }
             }
         }
+
+        if self.opt.enabled_indented_mutiline_value {
+            // multiline value, trims line-breaks
+            val.trim_matches_in_place('\n');
+        }
+
         Ok(val)
     }
 
@@ -2797,5 +2861,24 @@ bla = a
             assert_eq!(baz, "w\nx # intentional trailing whitespace below\ny\n\nz #2");
         }
         assert_eq!(bla, "a");
+    }
+
+    #[test]
+    fn whitespace_inside_quoted_value_should_not_be_trimed() {
+        let input = r#"
+[Foo]
+Key="  quoted with whitespace "  
+        "#;
+
+        let opt = Ini::load_from_str_opt(
+            input,
+            ParseOption {
+                enabled_quote: true,
+                ..ParseOption::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!("  quoted with whitespace ", opt.get_from(Some("Foo"), "Key").unwrap());
     }
 }
