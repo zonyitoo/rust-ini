@@ -44,7 +44,8 @@
 
 use std::{
     borrow::Cow,
-    char, error,
+    char,
+    error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -218,9 +219,11 @@ pub struct ParseOption {
     /// Enables values that span lines
     /// ```ini
     /// [Section]
-    /// Key1=C:\Windows
+    /// foo=
+    ///   b
+    ///   c
     /// ```
-    pub indented_multiline_values: bool,
+    pub enabled_indented_mutiline_value: bool,
 }
 
 impl Default for ParseOption {
@@ -228,7 +231,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
-            indented_multiline_values: false,
+            enabled_indented_mutiline_value: false,
         }
     }
 }
@@ -1567,7 +1570,7 @@ impl<'a> Parser<'a> {
             }
             _ => self.parse_str_until_eol(cfg!(feature = "inline-comment")),
         }?;
-        if self.opt.indented_multiline_values {
+        if self.opt.enabled_indented_mutiline_value {
             loop {
                 self.bump();
                 match self.ch {
@@ -1580,7 +1583,7 @@ impl<'a> Parser<'a> {
                     }
                     Some('\n') => {
                         val.push('\n');
-                        continue
+                        continue;
                     }
                     _ => break,
                 }
@@ -2758,7 +2761,7 @@ x3 = nb
     }
 
     #[test]
-    fn parse_indented_multiline_values() {
+    fn parse_enabled_indented_mutiline_value() {
         let input = "
 [Foo]
 bar =
@@ -2776,7 +2779,7 @@ bla = a
         let opt = Ini::load_from_str_opt(
             input,
             ParseOption {
-                indented_multiline_values: true,
+                enabled_indented_mutiline_value: true,
                 ..ParseOption::default()
             },
         )
