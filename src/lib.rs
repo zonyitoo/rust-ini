@@ -1501,10 +1501,7 @@ impl<'a> Parser<'a> {
                 // Skip [
                 self.bump();
 
-                let mut s = match self.parse_str_until(&[Some('\r'), Some('\n')], cfg!(feature = "inline-comment")) {
-                    Ok(r) => r,
-                    Err(err) => return Err(err)
-                };
+                let mut s = self.parse_str_until(&[Some('\r'), Some('\n')], cfg!(feature = "inline-comment"))?;
 
                 // Deal with inline comment
                 #[cfg(feature = "inline-comment")]
@@ -1512,7 +1509,7 @@ impl<'a> Parser<'a> {
                     self.parse_comment();
                 }
 
-                let tr = s.trim_end_matches(|c| c == ' ' || c == '\t');
+                let tr = s.trim_end_matches([' ', '\t']);
                 if !tr.ends_with(']') {
                     return self.error("section must be ended with ']'");
                 }
@@ -1658,9 +1655,7 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn parse_str_until_eol(&mut self, check_inline_comment: bool) -> Result<String, ParseError> {
-        let r = self.parse_str_until(&[Some('\n'), Some('\r'), None], check_inline_comment)?;
-
-        Ok(r)
+        self.parse_str_until(&[Some('\n'), Some('\r'), None], check_inline_comment)
     }
 }
 
