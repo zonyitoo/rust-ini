@@ -2862,7 +2862,7 @@ bla = a
     fn whitespace_inside_quoted_value_should_not_be_trimed() {
         let input = r#"
 [Foo]
-Key="  quoted with whitespace "  
+Key=   "  quoted with whitespace "  
         "#;
 
         let opt = Ini::load_from_str_opt(
