@@ -44,8 +44,7 @@
 
 use std::{
     borrow::Cow,
-    char,
-    error,
+    char, error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -300,53 +299,79 @@ impl Default for WriteOption {
     }
 }
 
+#[cfg(all(feature = "case-insensitive", not(feature = "nested-sections")))]
+pub type SectionKey = Option<UniCase<String>>;
+#[cfg(all(feature = "case-insensitive", feature = "nested-sections"))]
+pub type SectionKey = Option<Vec<UniCase<String>>>;
+#[cfg(all(not(feature = "case-insensitive"), not(feature = "nested-sections")))]
+pub type SectionKey = Option<String>;
+#[cfg(all(not(feature = "case-insensitive"), feature = "nested-sections"))]
+pub type SectionKey = Option<Vec<String>>;
+
 cfg_if! {
     if #[cfg(feature = "case-insensitive")] {
-        /// Internal storage of section's key
-        pub type SectionKey = Option<UniCase<String>>;
-        /// Internal storage of property's key
         pub type PropertyKey = UniCase<String>;
-
         macro_rules! property_get_key {
             ($s:expr) => {
                 &UniCase::from($s)
             };
         }
-
         macro_rules! property_insert_key {
             ($s:expr) => {
                 UniCase::from($s)
             };
         }
-
-        macro_rules! section_key {
-            ($s:expr) => {
-                $s.map(|s| UniCase::from(s.into()))
-            };
-        }
-
     } else {
-        /// Internal storage of section's key
-        pub type SectionKey = Option<String>;
-        /// Internal storage of property's key
         pub type PropertyKey = String;
-
         macro_rules! property_get_key {
             ($s:expr) => {
                 $s
             };
         }
-
         macro_rules! property_insert_key {
             ($s:expr) => {
                 $s
             };
         }
+    }
+}
 
-        macro_rules! section_key {
-            ($s:expr) => {
-                $s.map(Into::into)
-            };
+cfg_if! {
+    if #[cfg(feature = "case-insensitive")] {
+        cfg_if! {
+            if #[cfg(feature = "nested-sections")] {
+                macro_rules! section_key {
+                    ($s:expr) => {
+                        $s.map(|s| {
+                            s.split("][")
+                                .map(|part| UniCase::from(part.to_string()))
+                                .collect::<Vec<_>>()
+                        })
+                    };
+                }
+            } else {
+                macro_rules! section_key {
+                    ($s:expr) => {
+                        $s.map(|s| UniCase::from(s.into()))
+                    };
+                }
+            }
+        }
+    } else {
+        cfg_if! {
+            if #[cfg(feature = "nested-sections")] {
+                macro_rules! section_key {
+                    ($s:expr) => {
+                        $s.map(|s| s.split("][").map(Into::into).collect::<Vec<_>>())
+                    };
+                }
+            } else {
+                macro_rules! section_key {
+                    ($s:expr) => {
+                        $s.map(Into::into)
+                    };
+                }
+            }
         }
     }
 }
@@ -764,8 +789,19 @@ impl Ini {
     }
 
     /// Iterate with sections
-    pub fn sections(&self) -> impl DoubleEndedIterator<Item = Option<&str>> {
-        self.sections.keys().map(|s| s.as_ref().map(AsRef::as_ref))
+    pub fn sections(&self) -> impl DoubleEndedIterator<Item = Option<String>> + '_ {
+        self.sections.keys().map(|key| {
+            key.as_ref().map(|parts| {
+                #[cfg(feature = "nested-sections")]
+                {
+                    parts.join("][")
+                }
+                #[cfg(not(feature = "nested-sections"))]
+                {
+                    parts.clone()
+                }
+            })
+        })
     }
 
     /// Set key-value to a section
@@ -959,12 +995,11 @@ impl Ini {
             }
 
             if let Some(ref section) = *section {
-                write!(
-                    writer,
-                    "[{}]{}",
-                    escape_str(&section[..], opt.escape_policy),
-                    opt.line_separator
-                )?;
+                #[cfg(feature = "nested-sections")]
+                let section_str = format!("[{}]", parts.join("]["));
+                #[cfg(not(feature = "nested-sections"))]
+                let section_str = format!("[{}]", escape_str(section, opt.escape_policy));
+                write!(writer, "{}{}", section_str, opt.line_separator)?;
             }
             for (k, v) in props.iter() {
                 let k_str = escape_str(k, opt.escape_policy);

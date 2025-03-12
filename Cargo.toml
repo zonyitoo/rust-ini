@@ -40,3 +40,11 @@ case-insensitive = ["unicase"]
 # [[A]]
 # Key=value
 brackets-in-section-names = []
+# Allow parsing of nested sections
+#
+# For example:
+# [Section][Subsection]
+# key=value
+#
+# That appears in KDE Configuration files
+nested-sections = []
