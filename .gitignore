@@ -5,3 +5,4 @@ Cargo.lock
 Thumbs.db
 /.idea
 /.vscode
+.direnv/
