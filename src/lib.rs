@@ -44,8 +44,7 @@
 
 use std::{
     borrow::Cow,
-    char,
-    error,
+    char, error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -59,7 +58,6 @@ use ordered_multimap::{
     list_ordered_multimap::{Entry, IntoIter, Iter, IterMut, OccupiedEntry, VacantEntry},
     ListOrderedMultimap,
 };
-use trim_in_place::TrimInPlace;
 #[cfg(feature = "case-insensitive")]
 use unicase::UniCase;
 
@@ -1338,7 +1336,7 @@ impl<'a> Parser<'a> {
                 }
                 '[' => match self.parse_section() {
                     Ok(mut sec) => {
-                        sec.trim_in_place();
+                        trim_in_place(&mut sec);
                         cursec = Some(sec);
                         match result.entry(cursec.clone()) {
                             SectionEntry::Vacant(v) => {
@@ -1376,7 +1374,7 @@ impl<'a> Parser<'a> {
                 }
                 _ => match self.parse_key() {
                     Ok(mut mkey) => {
-                        mkey.trim_in_place();
+                        trim_in_place(&mut mkey);
                         curkey = mkey;
                     }
                     Err(e) => return Err(e),
@@ -1647,7 +1645,7 @@ impl<'a> Parser<'a> {
 
         if self.opt.enabled_indented_mutiline_value {
             // multiline value, trims line-breaks
-            val.trim_matches_in_place('\n');
+            trim_line_feeds(&mut val);
         }
 
         Ok(val)
@@ -1657,6 +1655,17 @@ impl<'a> Parser<'a> {
     fn parse_str_until_eol(&mut self, check_inline_comment: bool) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('\n'), Some('\r'), None], check_inline_comment)
     }
+}
+
+fn trim_in_place(string: &mut String) {
+    string.truncate(string.trim_end().len());
+    string.drain(..(string.len() - string.trim_start().len()));
+}
+
+fn trim_line_feeds(string: &mut String) {
+    const LF: char = '\n';
+    string.truncate(string.trim_end_matches(LF).len());
+    string.drain(..(string.len() - string.trim_start_matches(LF).len()));
 }
 
 // ------------------------------------------------------------------------------
