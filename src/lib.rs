@@ -1293,7 +1293,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Consume all the white space until the end of the line or a tab
+    /// Consume all whitespace including newlines, tabs, and spaces
+    ///
+    /// This function consumes all types of whitespace characters until it encounters
+    /// a non-whitespace character. Used for general whitespace cleanup between tokens.
     fn parse_whitespace(&mut self) {
         while let Some(c) = self.ch {
             if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
@@ -1303,7 +1306,46 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Consume all the white space except line break
+    /// Consume whitespace but preserve leading spaces/tabs on lines (for key indentation)
+    ///
+    /// This function is designed to consume whitespace while preserving leading spaces
+    /// and tabs that might be part of indented keys. It consumes newlines and other
+    /// whitespace, but stops when it encounters spaces or tabs that could be the
+    /// beginning of an indented key.
+    fn parse_whitespace_preserve_line_leading(&mut self) {
+        while let Some(c) = self.ch {
+            match c {
+                // Always consume spaces and tabs that are not at the beginning of a line
+                ' ' | '\t' => {
+                    self.bump();
+                    // Continue consuming until we hit a non-space/tab character
+                    // If it's a comment character, let the caller handle it
+                    // If it's a newline, we'll handle it in the next iteration
+                }
+                '\n' | '\r' => {
+                    // Consume the newline
+                    self.bump();
+                    // Check if the next line starts with spaces/tabs (potential key indentation)
+                    if matches!(self.ch, Some(' ') | Some('\t')) {
+                        // Don't consume the leading spaces/tabs - they're part of the key
+                        break;
+                    }
+                    // Continue consuming other whitespace after the newline
+                }
+                c if c.is_whitespace() => {
+                    // Consume other whitespace (like form feed, vertical tab, etc.)
+                    self.bump();
+                }
+                _ => break,
+            }
+        }
+    }
+
+    /// Consume all whitespace except line breaks (newlines and carriage returns)
+    ///
+    /// This function consumes spaces, tabs, and other whitespace characters but
+    /// stops at newlines and carriage returns. Used when parsing values to avoid
+    /// consuming the line terminator.
     fn parse_whitespace_except_line_break(&mut self) {
         while let Some(c) = self.ch {
             if (c == '\n' || c == '\r' || !c.is_whitespace()) && c != '\t' {
@@ -1372,16 +1414,36 @@ impl<'a> Parser<'a> {
                         Err(e) => return Err(e),
                     }
                 }
+                ' ' | '\t' => {
+                    // Handle keys that start with leading whitespace (indented keys)
+                    // This preserves the leading spaces/tabs as part of the key name
+                    match self.parse_key_with_leading_whitespace() {
+                        Ok(mut mkey) => {
+                            // Only trim trailing whitespace, preserve leading whitespace
+                            trim_end_in_place(&mut mkey);
+                            curkey = mkey;
+                        }
+                        Err(_) => {
+                            // If parsing key with leading whitespace fails,
+                            // it's probably just trailing whitespace at EOF - skip it
+                            self.bump();
+                        }
+                    }
+                }
                 _ => match self.parse_key() {
                     Ok(mut mkey) => {
-                        trim_in_place(&mut mkey);
+                        // For regular keys, only trim trailing whitespace to preserve
+                        // any leading whitespace that might be part of the key name
+                        trim_end_in_place(&mut mkey);
                         curkey = mkey;
                     }
                     Err(e) => return Err(e),
                 },
             }
 
-            self.parse_whitespace();
+            // Use specialized whitespace parsing that preserves leading spaces/tabs
+            // on new lines, which might be part of indented key names
+            self.parse_whitespace_preserve_line_leading();
         }
 
         Ok(result)
@@ -1533,8 +1595,43 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a key name until '=' or ':' delimiter
+    ///
+    /// This function parses characters until it encounters '=' or ':' which indicate
+    /// the start of a value. Used for regular keys without leading whitespace.
     fn parse_key(&mut self) -> Result<String, ParseError> {
         self.parse_str_until(&[Some('='), Some(':')], false)
+    }
+
+    /// Parse a key name that starts with leading whitespace (spaces or tabs)
+    ///
+    /// This function first captures any leading spaces or tabs, then parses the
+    /// rest of the key name until '=' or ':'. The leading whitespace is preserved
+    /// as part of the key name to support indented keys in configuration files.
+    ///
+    /// Used for keys like:
+    /// ```ini
+    /// [section]
+    ///   indented_key=value
+    ///     deeply_indented=value
+    /// ```
+    fn parse_key_with_leading_whitespace(&mut self) -> Result<String, ParseError> {
+        // Capture leading whitespace (spaces and tabs)
+        let mut leading_whitespace = String::new();
+        while let Some(c) = self.ch {
+            if c == ' ' || c == '\t' {
+                leading_whitespace.push(c);
+                self.bump();
+            } else {
+                break;
+            }
+        }
+
+        // Parse the rest of the key name
+        let key_part = self.parse_str_until(&[Some('='), Some(':')], false)?;
+
+        // Combine leading whitespace with key name
+        Ok(leading_whitespace + &key_part)
     }
 
     fn parse_val(&mut self) -> Result<String, ParseError> {
@@ -1660,6 +1757,10 @@ impl<'a> Parser<'a> {
 fn trim_in_place(string: &mut String) {
     string.truncate(string.trim_end().len());
     string.drain(..(string.len() - string.trim_start().len()));
+}
+
+fn trim_end_in_place(string: &mut String) {
+    string.truncate(string.trim_end().len());
 }
 
 fn trim_line_feeds(string: &mut String) {
@@ -2884,5 +2985,91 @@ Key=   "  quoted with whitespace "
         .unwrap();
 
         assert_eq!("  quoted with whitespace ", opt.get_from(Some("Foo"), "Key").unwrap());
+    }
+
+    #[test]
+    fn preserve_leading_whitespace_in_keys() {
+        // Test this particular case in AWS Config files
+        // https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html#cli-config-endpoint_url
+        let input = r"[profile dev]
+services=my-services
+
+[services my-services]
+dynamodb=
+  endpoint_url=http://localhost:8000
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let mut w = Vec::new();
+        data.write_to(&mut w).ok();
+        let output = String::from_utf8(w).ok().unwrap();
+        
+        // Normalize line endings for cross-platform compatibility
+        let normalized_input = input.replace('\r', "");
+        let normalized_output = output.replace('\r', "");
+        assert_eq!(normalized_input, normalized_output);
+    }
+
+    #[test]
+    fn preserve_leading_whitespace_mixed_indentation() {
+        let input = r"[section]
+key1=value1
+  key2=value2
+    key3=value3
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let section = data.section(Some("section")).unwrap();
+
+        // Check that leading whitespace is preserved
+        assert!(section.contains_key("key1"));
+        assert!(section.contains_key("  key2"));
+        assert!(section.contains_key("    key3"));
+
+        // Check round-trip preservation with normalized line endings
+        let mut w = Vec::new();
+        data.write_to(&mut w).ok();
+        let output = String::from_utf8(w).ok().unwrap();
+        let normalized_input = input.replace('\r', "");
+        let normalized_output = output.replace('\r', "");
+        assert_eq!(normalized_input, normalized_output);
+    }
+
+    #[test]
+    fn preserve_leading_whitespace_tabs_get_escaped() {
+        // This test documents the current behavior: tabs in keys get escaped
+        let input = r"[section]
+	key1=value1
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let section = data.section(Some("section")).unwrap();
+
+        // The tab is preserved during parsing
+        assert!(section.contains_key("\tkey1"));
+        assert_eq!(section.get("\tkey1"), Some("value1"));
+
+        // But tabs get escaped during writing (this is expected INI behavior)
+        let mut w = Vec::new();
+        data.write_to(&mut w).ok();
+        let output = String::from_utf8(w).ok().unwrap();
+        
+        // Normalize line endings and check that tab is escaped
+        let normalized_output = output.replace('\r', "");
+        let expected = "[section]\n\\tkey1=value1\n";
+        assert_eq!(normalized_output, expected);
+    }
+
+    #[test]
+    fn preserve_leading_whitespace_with_trailing_spaces() {
+        let input = r"[section]
+  key1  =value1
+    key2	=value2
+";
+        let data = Ini::load_from_str(input).unwrap();
+        let section = data.section(Some("section")).unwrap();
+
+        // Leading whitespace should be preserved, trailing whitespace in keys should be trimmed
+        assert!(section.contains_key("  key1"));
+        assert!(section.contains_key("    key2"));
+        assert_eq!(section.get("  key1"), Some("value1"));
+        assert_eq!(section.get("    key2"), Some("value2"));
     }
 }
