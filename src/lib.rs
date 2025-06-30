@@ -44,7 +44,8 @@
 
 use std::{
     borrow::Cow,
-    char, error,
+    char,
+    error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
@@ -222,6 +223,17 @@ pub struct ParseOption {
     ///   c
     /// ```
     pub enabled_indented_mutiline_value: bool,
+
+    /// Preserve key leading whitespace
+    ///
+    /// ```ini
+    /// [services my-services]
+    /// dynamodb=
+    ///   endpoint_url=http://localhost:8000
+    /// ```
+    ///
+    /// The leading whitespace in key `  endpoint_url` will be preserved if `enabled_preserve_key_leading_whitespace` is set to `true`.
+    pub enabled_preserve_key_leading_whitespace: bool,
 }
 
 impl Default for ParseOption {
@@ -230,6 +242,7 @@ impl Default for ParseOption {
             enabled_quote: true,
             enabled_escape: true,
             enabled_indented_mutiline_value: false,
+            enabled_preserve_key_leading_whitespace: false,
         }
     }
 }
@@ -435,14 +448,14 @@ impl Properties {
     }
 
     /// Get an iterator of the properties
-    pub fn iter(&self) -> PropertyIter {
+    pub fn iter(&self) -> PropertyIter<'_> {
         PropertyIter {
             inner: self.data.iter(),
         }
     }
 
     /// Get a mutable iterator of the properties
-    pub fn iter_mut(&mut self) -> PropertyIterMut {
+    pub fn iter_mut(&mut self) -> PropertyIterMut<'_> {
         PropertyIterMut {
             inner: self.data.iter_mut(),
         }
@@ -688,7 +701,7 @@ impl Ini {
     }
 
     /// Set with a specified section, `None` is for the general section
-    pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter
+    pub fn with_section<S>(&mut self, section: Option<S>) -> SectionSetter<'_>
     where
         S: Into<String>,
     {
@@ -696,7 +709,7 @@ impl Ini {
     }
 
     /// Set with general section, a simple wrapper of `with_section(None::<String>)`
-    pub fn with_general_section(&mut self) -> SectionSetter {
+    pub fn with_general_section(&mut self) -> SectionSetter<'_> {
         self.with_section(None::<String>)
     }
 
@@ -1420,7 +1433,11 @@ impl<'a> Parser<'a> {
                     match self.parse_key_with_leading_whitespace() {
                         Ok(mut mkey) => {
                             // Only trim trailing whitespace, preserve leading whitespace
-                            trim_end_in_place(&mut mkey);
+                            if self.opt.enabled_preserve_key_leading_whitespace {
+                                trim_end_in_place(&mut mkey);
+                            } else {
+                                trim_in_place(&mut mkey);
+                            }
                             curkey = mkey;
                         }
                         Err(_) => {
@@ -1434,7 +1451,11 @@ impl<'a> Parser<'a> {
                     Ok(mut mkey) => {
                         // For regular keys, only trim trailing whitespace to preserve
                         // any leading whitespace that might be part of the key name
-                        trim_end_in_place(&mut mkey);
+                        if self.opt.enabled_preserve_key_leading_whitespace {
+                            trim_end_in_place(&mut mkey);
+                        } else {
+                            trim_in_place(&mut mkey);
+                        }
                         curkey = mkey;
                     }
                     Err(e) => return Err(e),
@@ -2998,11 +3019,15 @@ services=my-services
 dynamodb=
   endpoint_url=http://localhost:8000
 ";
-        let data = Ini::load_from_str(input).unwrap();
+
+        let mut opts = ParseOption::default();
+        opts.enabled_preserve_key_leading_whitespace = true;
+
+        let data = Ini::load_from_str_opt(input, opts).unwrap();
         let mut w = Vec::new();
         data.write_to(&mut w).ok();
         let output = String::from_utf8(w).ok().unwrap();
-        
+
         // Normalize line endings for cross-platform compatibility
         let normalized_input = input.replace('\r', "");
         let normalized_output = output.replace('\r', "");
@@ -3016,7 +3041,10 @@ key1=value1
   key2=value2
     key3=value3
 ";
-        let data = Ini::load_from_str(input).unwrap();
+        let mut opts = ParseOption::default();
+        opts.enabled_preserve_key_leading_whitespace = true;
+
+        let data = Ini::load_from_str_opt(input, opts).unwrap();
         let section = data.section(Some("section")).unwrap();
 
         // Check that leading whitespace is preserved
@@ -3039,7 +3067,10 @@ key1=value1
         let input = r"[section]
 	key1=value1
 ";
-        let data = Ini::load_from_str(input).unwrap();
+        let mut opts = ParseOption::default();
+        opts.enabled_preserve_key_leading_whitespace = true;
+
+        let data = Ini::load_from_str_opt(input, opts).unwrap();
         let section = data.section(Some("section")).unwrap();
 
         // The tab is preserved during parsing
@@ -3050,7 +3081,7 @@ key1=value1
         let mut w = Vec::new();
         data.write_to(&mut w).ok();
         let output = String::from_utf8(w).ok().unwrap();
-        
+
         // Normalize line endings and check that tab is escaped
         let normalized_output = output.replace('\r', "");
         let expected = "[section]\n\\tkey1=value1\n";
@@ -3063,7 +3094,10 @@ key1=value1
   key1  =value1
     key2	=value2
 ";
-        let data = Ini::load_from_str(input).unwrap();
+        let mut opts = ParseOption::default();
+        opts.enabled_preserve_key_leading_whitespace = true;
+
+        let data = Ini::load_from_str_opt(input, opts).unwrap();
         let section = data.section(Some("section")).unwrap();
 
         // Leading whitespace should be preserved, trailing whitespace in keys should be trimmed
