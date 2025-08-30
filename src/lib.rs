@@ -1310,14 +1310,14 @@ impl<'a> Parser<'a> {
     ///
     /// This function consumes all types of whitespace characters until it encounters
     /// a non-whitespace character. Used for general whitespace cleanup between tokens.
-    fn parse_whitespace(&mut self) {
-        while let Some(c) = self.ch {
-            if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
-                break;
-            }
-            self.bump();
-        }
-    }
+    // fn parse_whitespace(&mut self) {
+    //     while let Some(c) = self.ch {
+    //         if !c.is_whitespace() && c != '\n' && c != '\t' && c != '\r' {
+    //             break;
+    //         }
+    //         self.bump();
+    //     }
+    // }
 
     /// Consume whitespace but preserve leading spaces/tabs on lines (for key indentation)
     ///
@@ -1374,7 +1374,6 @@ impl<'a> Parser<'a> {
         let mut curkey: String = "".into();
         let mut cursec: Option<String> = None;
 
-        self.parse_whitespace();
         while let Some(cur_ch) = self.ch {
             match cur_ch {
                 ';' | '#' => {
@@ -1438,49 +1437,61 @@ impl<'a> Parser<'a> {
                             break;
                         }
                     }
-                    
+
                     // Check if what follows is a section header
-                    if let Some('[') = self.ch {
-                        // This is a section header, parse it as such
-                        match self.parse_section() {
-                            Ok(mut sec) => {
-                                trim_in_place(&mut sec);
-                                cursec = Some(sec);
-                                match result.entry(cursec.clone()) {
-                                    SectionEntry::Vacant(v) => {
-                                        v.insert(Default::default());
-                                    }
-                                    SectionEntry::Occupied(mut o) => {
-                                        o.append(Default::default());
+                    match self.ch {
+                        Some('[') => {
+                            // This is a section header, parse it as such
+                            match self.parse_section() {
+                                Ok(mut sec) => {
+                                    trim_in_place(&mut sec);
+                                    cursec = Some(sec);
+                                    match result.entry(cursec.clone()) {
+                                        SectionEntry::Vacant(v) => {
+                                            v.insert(Default::default());
+                                        }
+                                        SectionEntry::Occupied(mut o) => {
+                                            o.append(Default::default());
+                                        }
                                     }
                                 }
+                                Err(e) => return Err(e),
                             }
-                            Err(e) => return Err(e),
                         }
-                    } else {
-                        // This is a key with leading whitespace, parse the rest of it
-                        match self.parse_str_until(&[Some('='), Some(':')], false) {
-                            Ok(key_part) => {
-                                let mut mkey = if self.opt.enabled_preserve_key_leading_whitespace {
-                                    consumed_whitespace + &key_part
-                                } else {
-                                    key_part
-                                };
-                                
-                                // Only trim trailing whitespace, preserve leading whitespace if enabled
-                                if self.opt.enabled_preserve_key_leading_whitespace {
-                                    trim_end_in_place(&mut mkey);
-                                } else {
-                                    trim_in_place(&mut mkey);
+                        Some('\n') | Some('\r') => {
+                            // This is just leading whitespace before a newline, skip it
+                            self.bump(); // Consume the newline
+                            continue;
+                        }
+                        _ => {
+                            // This is a key with leading whitespace, parse the rest of it
+                            match self.parse_str_until(&[Some('='), Some(':')], false) {
+                                Ok(key_part) => {
+                                    let mut mkey = if self.opt.enabled_preserve_key_leading_whitespace {
+                                        consumed_whitespace + &key_part
+                                    } else {
+                                        key_part
+                                    };
+
+                                    // Only trim trailing whitespace, preserve leading whitespace if enabled
+                                    if self.opt.enabled_preserve_key_leading_whitespace {
+                                        trim_end_in_place(&mut mkey);
+                                    } else {
+                                        trim_in_place(&mut mkey);
+                                    }
+                                    curkey = mkey;
                                 }
-                                curkey = mkey;
-                            }
-                            Err(_) => {
-                                // If parsing key fails, it's probably just trailing whitespace at EOF - skip it
-                                // We already consumed the whitespace, so just continue
+                                Err(_) => {
+                                    // If parsing key fails, it's probably just trailing whitespace at EOF - skip it
+                                    // We already consumed the whitespace, so just continue
+                                }
                             }
                         }
                     }
+                }
+                '\n' | '\r' => {
+                    // Empty line, just skip it
+                    self.bump();
                 }
                 _ => match self.parse_key() {
                     Ok(mut mkey) => {
@@ -3117,29 +3128,29 @@ key1=value1
 
         // Test with default options (whitespace preservation disabled)
         let data_default = Ini::load_from_str(input).unwrap();
-        
+
         // Should have two sections
         assert!(data_default.section(Some("SectionA")).is_some());
         assert!(data_default.section(Some("SectionB")).is_some());
-        
+
         let section_a = data_default.section(Some("SectionA")).unwrap();
         let section_b = data_default.section(Some("SectionB")).unwrap();
-        
+
         assert_eq!(section_a.get("Key1"), Some("Value1"));
         assert_eq!(section_b.get("Key2"), Some("Value2"));
-        
+
         // Test with whitespace preservation enabled
         let mut opts = ParseOption::default();
         opts.enabled_preserve_key_leading_whitespace = true;
         let data_preserve = Ini::load_from_str_opt(input, opts).unwrap();
-        
+
         // Should still have two sections
         assert!(data_preserve.section(Some("SectionA")).is_some());
         assert!(data_preserve.section(Some("SectionB")).is_some());
-        
+
         let section_a_preserve = data_preserve.section(Some("SectionA")).unwrap();
         let section_b_preserve = data_preserve.section(Some("SectionB")).unwrap();
-        
+
         assert_eq!(section_a_preserve.get("Key1"), Some("Value1"));
         // With whitespace preservation, the key includes leading whitespace
         assert_eq!(section_b_preserve.get("  Key2"), Some("Value2"));
@@ -3151,13 +3162,13 @@ key1=value1
         let input = "[SectionA]\nKey1=Value1\n\n\t  [SectionB]\n\t  Key2=Value2";
 
         let data_default = Ini::load_from_str(input).unwrap();
-        
+
         assert!(data_default.section(Some("SectionA")).is_some());
         assert!(data_default.section(Some("SectionB")).is_some());
-        
+
         let section_a = data_default.section(Some("SectionA")).unwrap();
         let section_b = data_default.section(Some("SectionB")).unwrap();
-        
+
         assert_eq!(section_a.get("Key1"), Some("Value1"));
         assert_eq!(section_b.get("Key2"), Some("Value2"));
     }
@@ -3168,11 +3179,11 @@ key1=value1
         let input = "[SectionA]\nKey1=Value1\n\n  [SectionB]\n  Key2=Value2\n\n    [SectionC]\n    Key3=Value3";
 
         let data = Ini::load_from_str(input).unwrap();
-        
+
         assert!(data.section(Some("SectionA")).is_some());
         assert!(data.section(Some("SectionB")).is_some());
         assert!(data.section(Some("SectionC")).is_some());
-        
+
         assert_eq!(data.section(Some("SectionA")).unwrap().get("Key1"), Some("Value1"));
         assert_eq!(data.section(Some("SectionB")).unwrap().get("Key2"), Some("Value2"));
         assert_eq!(data.section(Some("SectionC")).unwrap().get("Key3"), Some("Value3"));
@@ -3185,13 +3196,13 @@ key1=value1
         let mut opts = ParseOption::default();
         opts.enabled_preserve_key_leading_whitespace = true;
         let data = Ini::load_from_str_opt(input, opts).unwrap();
-        
+
         assert!(data.section(Some("SectionA")).is_some());
         assert!(data.section(Some("SectionB")).is_some());
-        
+
         let section_a = data.section(Some("SectionA")).unwrap();
         let section_b = data.section(Some("SectionB")).unwrap();
-        
+
         assert_eq!(section_a.get("Key1"), Some("Value1"));
         assert_eq!(section_b.get("  Key2"), Some("Value2"));
     }
@@ -3203,13 +3214,13 @@ key1=value1
         let mut opts = ParseOption::default();
         opts.enabled_preserve_key_leading_whitespace = true;
         let data = Ini::load_from_str_opt(input, opts).unwrap();
-        
+
         assert!(data.section(Some("SectionA")).is_some());
         assert!(data.section(Some("SectionB")).is_some());
-        
+
         let section_a = data.section(Some("SectionA")).unwrap();
         let section_b = data.section(Some("SectionB")).unwrap();
-        
+
         assert_eq!(section_a.get("Key1"), Some("Value1"));
         assert_eq!(section_b.get("\t  Key2"), Some("Value2"));
     }
@@ -3221,13 +3232,27 @@ key1=value1
         let mut opts = ParseOption::default();
         opts.enabled_preserve_key_leading_whitespace = true;
         let data = Ini::load_from_str_opt(input, opts).unwrap();
-        
+
         assert!(data.section(Some("SectionA")).is_some());
         assert!(data.section(Some("SectionB")).is_some());
         assert!(data.section(Some("SectionC")).is_some());
-        
+
         assert_eq!(data.section(Some("SectionA")).unwrap().get("Key1"), Some("Value1"));
         assert_eq!(data.section(Some("SectionB")).unwrap().get("  Key2"), Some("Value2"));
         assert_eq!(data.section(Some("SectionC")).unwrap().get("    Key3"), Some("Value3"));
+    }
+
+    #[test]
+    fn general_section_with_key_leading_whitespace() {
+        let input = "\n\n\n\r\n  key1=value1\n\tkey2=value2\nkey3=value3\n[Section]\nkeyA=valueA";
+        let mut opts = ParseOption::default();
+        opts.enabled_preserve_key_leading_whitespace = true;
+        let data = Ini::load_from_str_opt(input, opts).unwrap();
+        let general = data.general_section();
+        assert_eq!(general.get("  key1"), Some("value1"));
+        assert_eq!(general.get("\tkey2"), Some("value2"));
+        assert_eq!(general.get("key3"), Some("value3"));
+        let section = data.section(Some("Section")).unwrap();
+        assert_eq!(section.get("keyA"), Some("valueA"));
     }
 }
