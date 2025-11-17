@@ -48,7 +48,7 @@ use std::{
     error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Read, Write},
     ops::{Index, IndexMut},
     path::Path,
     str::Chars,
@@ -1062,20 +1062,6 @@ impl Ini {
             Ok(r) => r,
         };
 
-        let mut with_bom = false;
-
-        // Check if file starts with a BOM marker
-        // UTF-8: EF BB BF
-        let mut bom = [0u8; 3];
-        if reader.read_exact(&mut bom).is_ok() && &bom == b"\xEF\xBB\xBF" {
-            with_bom = true;
-        }
-
-        if !with_bom {
-            // Reset file pointer
-            reader.seek(SeekFrom::Start(0))?;
-        }
-
         Ini::read_from_opt(&mut reader, opt)
     }
 }
@@ -1266,12 +1252,20 @@ impl<'a> Parser<'a> {
             rdr,
             opt,
         };
-        p.bump();
+
+        // Skip Unicode Byte Order Marker (BOM) if present
+        let mut first_ch = p.rdr.next();
+        if first_ch == Some('\u{FEFF}') {
+            first_ch = p.rdr.next();
+        }
+
+        p.bump_inner(first_ch);
         p
     }
 
-    fn bump(&mut self) {
-        self.ch = self.rdr.next();
+    #[inline]
+    fn bump_inner(&mut self, ch: Option<char>) {
+        self.ch = ch;
         match self.ch {
             Some('\n') => {
                 self.line += 1;
@@ -1282,6 +1276,11 @@ impl<'a> Parser<'a> {
             }
             None => {}
         }
+    }
+
+    fn bump(&mut self) {
+        let ch = self.rdr.next();
+        self.bump_inner(ch);
     }
 
     #[cold]
@@ -3254,5 +3253,15 @@ key1=value1
         assert_eq!(general.get("key3"), Some("value3"));
         let section = data.section(Some("Section")).unwrap();
         assert_eq!(section.get("keyA"), Some("valueA"));
+    }
+
+    #[test]
+    fn load_from_string_with_bom() {
+        let content_bytes = b"\xEF\xBB\xBF[Test]Key=Value\n";
+
+        let content_str = str::from_utf8(content_bytes).expect("converting to UTF-8");
+
+        let ini = Ini::load_from_str(content_str).unwrap();
+        assert_eq!(ini.get_from(Some("Test"), "Key"), Some("Value"));
     }
 }
