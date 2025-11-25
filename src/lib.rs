@@ -222,7 +222,7 @@ pub struct ParseOption {
     ///   b
     ///   c
     /// ```
-    pub enabled_indented_mutiline_value: bool,
+    pub enabled_indented_multiline_value: bool,
 
     /// Preserve key leading whitespace
     ///
@@ -241,7 +241,7 @@ impl Default for ParseOption {
         ParseOption {
             enabled_quote: true,
             enabled_escape: true,
-            enabled_indented_mutiline_value: false,
+            enabled_indented_multiline_value: false,
             enabled_preserve_key_leading_whitespace: false,
         }
     }
@@ -1730,7 +1730,7 @@ impl<'a> Parser<'a> {
 
                     val.push_str(trimmed_value);
 
-                    if self.opt.enabled_indented_mutiline_value {
+                    if self.opt.enabled_indented_multiline_value {
                         // Multiline value is supported. We now check whether the next line is started with ' ' or '\t'.
                         self.bump();
 
@@ -1775,7 +1775,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if self.opt.enabled_indented_mutiline_value {
+        if self.opt.enabled_indented_multiline_value {
             // multiline value, trims line-breaks
             trim_line_feeds(&mut val);
         }
@@ -2965,7 +2965,7 @@ x3 = nb
     }
 
     #[test]
-    fn parse_enabled_indented_mutiline_value() {
+    fn parse_enabled_indented_multiline_value() {
         let input = "
 [Foo]
 bar =
@@ -2983,7 +2983,7 @@ bla = a
         let opt = Ini::load_from_str_opt(
             input,
             ParseOption {
-                enabled_indented_mutiline_value: true,
+                enabled_indented_multiline_value: true,
                 ..ParseOption::default()
             },
         )
