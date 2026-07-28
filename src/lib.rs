@@ -187,13 +187,13 @@ fn escape_str_multiline(s: &str, policy: EscapePolicy, multiline_indent: bool) -
         match c {
             '\\' => escaped.push_str("\\\\"),
             '\0' => escaped.push_str("\\0"),
-            '\x01'..='\x06' | '\x0e'..='\x1f' | '\x7f'..='\u{00ff}' => {
+            // VT (0x0b) and FF (0x0c) have no documented named escape and the parser
+            // has no arm for `\v`/`\f`, so hex-escape them like the other C0 controls.
+            '\x01'..='\x06' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'..='\u{00ff}' => {
                 escaped.push_str(&format!("\\x{:04x}", c as isize)[..])
             }
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
-            '\x0c' => escaped.push_str("\\f"),
-            '\x0b' => escaped.push_str("\\v"),
             '\n' => escaped.push_str("\\n"),
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
@@ -2850,6 +2850,53 @@ c = d
             );
             assert_eq!(escape_str(test_whitespace, policy), r"\t \r\n");
         }
+    }
+
+    #[test]
+    fn escape_str_vertical_tab_and_form_feed() {
+        // VT (0x0b) and FF (0x0c) have no named escape in the parser, so they must be
+        // hex-escaped like any other C0 control rather than emitted as `\v`/`\f`.
+        for policy in [
+            EscapePolicy::Basics,
+            EscapePolicy::BasicsUnicode,
+            EscapePolicy::Reserved,
+            EscapePolicy::Everything,
+        ] {
+            assert_eq!(escape_str("\x0b\x0c", policy), r"\x000b\x000c");
+        }
+    }
+
+    #[test]
+    fn write_read_roundtrip_controls() {
+        // Every value the default writer escapes must read back unchanged through the
+        // default parser. Regression for VT/FF, which were written `\v`/`\f` but have
+        // no parser arm, so they came back as the literal letters `v`/`f`.
+        let roundtrip = |val: &str| -> String {
+            let mut ini = Ini::new();
+            ini.with_section(Some("sec")).set("key", val);
+            let mut buf: Vec<u8> = Vec::new();
+            ini.write_to(&mut buf).unwrap();
+            Ini::load_from_str(&String::from_utf8(buf).unwrap())
+                .unwrap()
+                .get_from(Some("sec"), "key")
+                .unwrap()
+                .to_string()
+        };
+
+        // Exhaustive over C0, C1 and low BMP: bounds the class to exactly VT and FF.
+        let mut fails = vec![];
+        for c in 0u32..=0x2ff {
+            if let Some(ch) = char::from_u32(c) {
+                let val = format!("A{ch}B");
+                if roundtrip(&val) != val {
+                    fails.push(format!("{c:#04x}"));
+                }
+            }
+        }
+        assert!(fails.is_empty(), "round-trip failed for: {:?}", fails);
+
+        assert_eq!(roundtrip("A\x0bB"), "A\x0bB");
+        assert_eq!(roundtrip("A\x0cB"), "A\x0cB");
     }
 
     #[test]
