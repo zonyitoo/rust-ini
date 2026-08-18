@@ -1486,6 +1486,13 @@ impl<'a> Parser<'a> {
                             self.bump(); // Consume the newline
                             continue;
                         }
+                        Some(';') | Some('#') => {
+                            // An indented comment is still a whole-line comment.
+                            // Without this arm it would fall through to key parsing,
+                            // which scans past the comment marker and across the
+                            // newline to the next line's `=`, dropping that pair.
+                            self.parse_comment();
+                        }
                         _ => {
                             // This is a key with leading whitespace, parse the rest of it
                             match self.parse_str_until(&[Some('='), Some(':')], false) {
@@ -3070,6 +3077,23 @@ dynamodb=
         let normalized_input = input.replace('\r', "");
         let normalized_output = output.replace('\r', "");
         assert_eq!(normalized_input, normalized_output);
+    }
+
+    #[test]
+    fn indented_comment_not_parsed_as_key() {
+        // Regression test for https://github.com/zonyitoo/rust-ini/issues/155
+        // An indented `;` or `#` line is a whole-line comment. Before the fix it
+        // fell through to the key-parsing arm, which scans past the comment marker
+        // and across the newline to the next line's `=`, yielding a bogus key and
+        // silently dropping the following key/value pair.
+        let ini = Ini::load_from_str("[s]\na=1\n  ; c\nb=2\n").unwrap();
+        assert_eq!(ini.get_from(Some("s"), "a"), Some("1"));
+        assert_eq!(ini.get_from(Some("s"), "b"), Some("2"));
+
+        // Same behavior for an indented `#` comment.
+        let ini = Ini::load_from_str("[s]\na=1\n  # c\nb=2\n").unwrap();
+        assert_eq!(ini.get_from(Some("s"), "a"), Some("1"));
+        assert_eq!(ini.get_from(Some("s"), "b"), Some("2"));
     }
 
     #[test]
