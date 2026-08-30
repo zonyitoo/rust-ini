@@ -49,6 +49,7 @@ use std::{
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Write},
+    iter::FromIterator,
     ops::{Index, IndexMut},
     path::Path,
     str::Chars,
@@ -1207,6 +1208,27 @@ impl IntoIterator for Ini {
         SectionIntoIter {
             inner: self.sections.into_iter(),
         }
+    }
+}
+
+impl<InnerIter, S, K, V> FromIterator<(S, InnerIter)> for Ini
+where
+    InnerIter: IntoIterator<Item = (K, V)>,
+    S: Into<String>,
+    K: Into<String>,
+    V: Into<String>,
+{
+    fn from_iter<T: IntoIterator<Item = (S, InnerIter)>>(iter: T) -> Self {
+        let mut ini = Ini::new();
+        for (section, properties) in iter {
+            let mut section = ini.with_section(Some(section));
+
+            for (key, value) in properties {
+                section.set(key, value);
+            }
+        }
+
+        ini
     }
 }
 
