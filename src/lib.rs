@@ -44,8 +44,7 @@
 
 use std::{
     borrow::Cow,
-    char,
-    error,
+    char, error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Write},
@@ -175,7 +174,7 @@ fn escape_str_multiline(s: &str, policy: EscapePolicy, multiline_indent: bool) -
         if multiline_indent && c == '\n' {
             escaped.push(c);
             indent = true;
-            continue
+            continue;
         }
         // if we know this is not something to escape as per policy, we just
         // write it and continue.
@@ -3319,9 +3318,12 @@ key1=value1
 
         let mut ini = Ini::new();
         ini.set_to(Some("test"), "key".to_string(), multi.to_string());
-        
+
         let mut buf = Vec::new();
-        let opt = WriteOption { indent_multiline_value: true, ..Default::default() };
+        let opt = WriteOption {
+            indent_multiline_value: true,
+            ..Default::default()
+        };
 
         ini.write_to_opt(&mut buf, opt).unwrap();
 
@@ -3347,8 +3349,12 @@ key1=value1
 
         let ini = Ini::load_from_str_opt(
             expected,
-            ParseOption { enabled_indented_multiline_value: true, ..Default::default() },
-        ).unwrap();
+            ParseOption {
+                enabled_indented_multiline_value: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         // The last \n will be eaten but that's ok
         let value = ini.get_from(Some("test"), "key").unwrap();
