@@ -44,8 +44,7 @@
 
 use std::{
     borrow::Cow,
-    char,
-    error,
+    char, error,
     fmt::{self, Display},
     fs::{File, OpenOptions},
     io::{self, Read, Write},
@@ -55,10 +54,8 @@ use std::{
 };
 
 use cfg_if::cfg_if;
-use ordered_multimap::{
-    list_ordered_multimap::{Entry, IntoIter, Iter, IterMut, OccupiedEntry, VacantEntry},
-    ListOrderedMultimap,
-};
+mod ordered_multimap;
+use crate::ordered_multimap::{IntoIter, Iter, IterMut, OrderedMultimap};
 #[cfg(feature = "case-insensitive")]
 use unicase::UniCase;
 
@@ -175,7 +172,7 @@ fn escape_str_multiline(s: &str, policy: EscapePolicy, multiline_indent: bool) -
         if multiline_indent && c == '\n' {
             escaped.push(c);
             indent = true;
-            continue
+            continue;
         }
         // if we know this is not something to escape as per policy, we just
         // write it and continue.
@@ -344,7 +341,7 @@ cfg_if! {
 
         macro_rules! property_get_key {
             ($s:expr) => {
-                &UniCase::from($s)
+                &UniCase::<&str>::from($s)
             };
         }
 
@@ -427,7 +424,7 @@ impl<'a> SectionSetter<'a> {
         self
     }
 
-    /// Delete the first entry in this section with `key`
+    /// Delete all entries in sections with this name and `key`
     pub fn delete<'b, K>(&'b mut self, key: &K) -> &'b mut SectionSetter<'a>
     where
         K: AsRef<str>,
@@ -452,7 +449,7 @@ impl<'a> SectionSetter<'a> {
 /// Properties type (key-value pairs)
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Properties {
-    data: ListOrderedMultimap<PropertyKey, String>,
+    data: OrderedMultimap<PropertyKey, String>,
 }
 
 impl Properties {
@@ -463,7 +460,7 @@ impl Properties {
 
     /// Get the number of the properties
     pub fn len(&self) -> usize {
-        self.data.keys_len()
+        self.data.keys().len()
     }
 
     /// Check if properties has 0 elements
@@ -508,22 +505,23 @@ impl Properties {
         self.data.append(property_insert_key!(k.into()), v.into());
     }
 
-    /// Get the first value associate with the key
+    /// Get the first value associated with the key
     pub fn get<S: AsRef<str>>(&self, s: S) -> Option<&str> {
         self.data.get(property_get_key!(s.as_ref())).map(|v| v.as_str())
     }
 
-    /// Get all values associate with the key
+    /// Get all values associated with the key
     pub fn get_all<S: AsRef<str>>(&self, s: S) -> impl DoubleEndedIterator<Item = &str> {
-        self.data.get_all(property_get_key!(s.as_ref())).map(|v| v.as_str())
+        let key_index = self.data.position_key(property_get_key!(s.as_ref()));
+        self.data.get_all_at(key_index).map(|v| v.as_str())
     }
 
-    /// Remove the property with the first value of the key
+    /// Remove all values associated with the key and return the first one
     pub fn remove<S: AsRef<str>>(&mut self, s: S) -> Option<String> {
         self.data.remove(property_get_key!(s.as_ref()))
     }
 
-    /// Remove the property with all values with the same key
+    /// Remove and return all values associated with the key
     pub fn remove_all<S: AsRef<str>>(&mut self, s: S) -> impl DoubleEndedIterator<Item = String> + '_ {
         self.data.remove_all(property_get_key!(s.as_ref()))
     }
@@ -643,39 +641,42 @@ impl IntoIterator for Properties {
     }
 }
 
-/// A view into a vacant entry in a `Ini`
+/// A view into a vacant entry in an `Ini`
 pub struct SectionVacantEntry<'a> {
-    inner: VacantEntry<'a, SectionKey, Properties>,
+    sections: &'a mut OrderedMultimap<SectionKey, Properties>,
+    key: SectionKey,
 }
 
 impl<'a> SectionVacantEntry<'a> {
     /// Insert one new section
     pub fn insert(self, value: Properties) -> &'a mut Properties {
-        self.inner.insert(value)
+        self.sections.push_new(self.key, value)
     }
 }
 
-/// A view into a occupied entry in a `Ini`
+/// A view into an occupied entry in an `Ini`
 pub struct SectionOccupiedEntry<'a> {
-    inner: OccupiedEntry<'a, SectionKey, Properties>,
+    sections: &'a mut OrderedMultimap<SectionKey, Properties>,
+    key_index: usize,
 }
 
 impl<'a> SectionOccupiedEntry<'a> {
-    /// Into the first internal mutable properties
+    /// Return the first mutable properties for this section
     pub fn into_mut(self) -> &'a mut Properties {
-        self.inner.into_mut()
+        self.sections
+            .first_mut_at(self.key_index)
+            .expect("occupied section has a value")
     }
 
     /// Append a new section
     pub fn append(&mut self, prop: Properties) {
-        self.inner.append(prop);
+        self.sections.append_at(self.key_index, prop);
     }
 
     fn last_mut(&'a mut self) -> &'a mut Properties {
-        self.inner
-            .iter_mut()
-            .next_back()
-            .expect("occupied section shouldn't have 0 property")
+        self.sections
+            .last_mut_at(self.key_index)
+            .expect("occupied section has a value")
     }
 }
 
@@ -703,19 +704,10 @@ impl<'a> SectionEntry<'a> {
     }
 }
 
-impl<'a> From<Entry<'a, SectionKey, Properties>> for SectionEntry<'a> {
-    fn from(e: Entry<'a, SectionKey, Properties>) -> SectionEntry<'a> {
-        match e {
-            Entry::Occupied(inner) => SectionEntry::Occupied(SectionOccupiedEntry { inner }),
-            Entry::Vacant(inner) => SectionEntry::Vacant(SectionVacantEntry { inner }),
-        }
-    }
-}
-
 /// Ini struct
 #[derive(Debug, Clone)]
 pub struct Ini {
-    sections: ListOrderedMultimap<SectionKey, Properties>,
+    sections: OrderedMultimap<SectionKey, Properties>,
 }
 
 impl Ini {
@@ -782,15 +774,21 @@ impl Ini {
     }
 
     /// Get the entry
-    #[cfg(not(feature = "case-insensitive"))]
     pub fn entry(&mut self, name: Option<String>) -> SectionEntry<'_> {
-        SectionEntry::from(self.sections.entry(name))
-    }
-
-    /// Get the entry
-    #[cfg(feature = "case-insensitive")]
-    pub fn entry(&mut self, name: Option<String>) -> SectionEntry<'_> {
-        SectionEntry::from(self.sections.entry(name.map(UniCase::from)))
+        #[cfg(feature = "case-insensitive")]
+        let key: SectionKey = name.map(UniCase::from);
+        #[cfg(not(feature = "case-insensitive"))]
+        let key = name;
+        match self.sections.position_key(&key) {
+            Some(key_index) => SectionEntry::Occupied(SectionOccupiedEntry {
+                sections: &mut self.sections,
+                key_index,
+            }),
+            None => SectionEntry::Vacant(SectionVacantEntry {
+                sections: &mut self.sections,
+                key,
+            }),
+        }
     }
 
     /// Clear all entries
@@ -874,7 +872,7 @@ impl Ini {
 
     /// Total sections count
     pub fn len(&self) -> usize {
-        self.sections.keys_len()
+        self.sections.keys().len()
     }
 
     /// Check if object contains no section
@@ -983,7 +981,7 @@ impl Ini {
     pub fn write_to_opt<W: Write>(&self, writer: &mut W, opt: WriteOption) -> io::Result<()> {
         let mut firstline = true;
 
-        for (section, props) in &self.sections {
+        for (section, props) in self.sections.iter() {
             if !props.data.is_empty() {
                 if firstline {
                     firstline = false;
@@ -1885,6 +1883,17 @@ mod test {
 
         let res = props.remove_all("k1").collect::<Vec<String>>();
         assert_eq!(res, vec!["v1", "v2"]);
+        assert!(!props.contains_key("k1"));
+    }
+
+    #[test]
+    fn property_remove_first() {
+        let mut props = Properties::new();
+        props.append("k1", "v1");
+        props.append("k1", "v2");
+
+        // `remove` drops all values of the key and returns the first one.
+        assert_eq!(props.remove("k1"), Some("v1".to_owned()));
         assert!(!props.contains_key("k1"));
     }
 
@@ -3005,7 +3014,7 @@ bar =
 
 baz = w
   x # intentional trailing whitespace below
-   y 
+   y
 
  z #2
 bla = a
@@ -3038,7 +3047,7 @@ bla = a
     fn whitespace_inside_quoted_value_should_not_be_trimed() {
         let input = r#"
 [Foo]
-Key=   "  quoted with whitespace "  
+Key=   "  quoted with whitespace "
         "#;
 
         let opt = Ini::load_from_str_opt(
@@ -3319,9 +3328,12 @@ key1=value1
 
         let mut ini = Ini::new();
         ini.set_to(Some("test"), "key".to_string(), multi.to_string());
-        
+
         let mut buf = Vec::new();
-        let opt = WriteOption { indent_multiline_value: true, ..Default::default() };
+        let opt = WriteOption {
+            indent_multiline_value: true,
+            ..Default::default()
+        };
 
         ini.write_to_opt(&mut buf, opt).unwrap();
 
@@ -3347,8 +3359,12 @@ key1=value1
 
         let ini = Ini::load_from_str_opt(
             expected,
-            ParseOption { enabled_indented_multiline_value: true, ..Default::default() },
-        ).unwrap();
+            ParseOption {
+                enabled_indented_multiline_value: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         // The last \n will be eaten but that's ok
         let value = ini.get_from(Some("test"), "key").unwrap();
