@@ -154,6 +154,7 @@ impl EscapePolicy {
 // * `\=` Equals sign
 // * `\:` Colon
 // * `\x????` Unicode character with hexadecimal code point corresponding to ????
+// * `\U????????` Unicode character with an eight-digit hexadecimal code point
 #[cfg(test)]
 fn escape_str(s: &str, policy: EscapePolicy) -> String {
     escape_str_multiline(s, policy, false)
@@ -198,9 +199,8 @@ fn escape_str_multiline(s: &str, policy: EscapePolicy, multiline_indent: bool) -
             '\t' => escaped.push_str("\\t"),
             '\r' => escaped.push_str("\\r"),
             '\u{0080}'..='\u{FFFF}' => escaped.push_str(&format!("\\x{:04x}", c as isize)[..]),
-            // Longer escapes.
-            '\u{10000}'..='\u{FFFFF}' => escaped.push_str(&format!("\\x{:05x}", c as isize)[..]),
-            '\u{100000}'..='\u{10FFFF}' => escaped.push_str(&format!("\\x{:06x}", c as isize)[..]),
+            // Keep supplementary codepoints distinct from four-digit \x escapes.
+            '\u{10000}'..='\u{10FFFF}' => escaped.push_str(&format!("\\U{:08x}", c as u32)[..]),
             _ => {
                 escaped.push('\\');
                 escaped.push(c);
@@ -1609,10 +1609,11 @@ impl<'a> Parser<'a> {
                             'r' => result.push('\r'),
                             'n' => result.push('\n'),
                             '\n' => self.bump(),
-                            'x' => {
-                                // Unicode 4 character
-                                let mut code: String = String::with_capacity(4);
-                                for _ in 0..4 {
+                            'x' | 'U' => {
+                                // Keep the existing four-digit escape boundary unambiguous.
+                                let digits = if ch == 'x' { 4 } else { 8 };
+                                let mut code: String = String::with_capacity(digits);
+                                for _ in 0..digits {
                                     self.bump();
                                     let ch = self.char_or_eof(endpoint)?;
                                     if ch == '\\' {
@@ -1629,9 +1630,16 @@ impl<'a> Parser<'a> {
                                     code.push(ch);
                                 }
                                 let r = u32::from_str_radix(&code[..], 16);
-                                match r.ok().and_then(char::from_u32) {
+                                let valid_hex = ch != 'U' || code.chars().all(|c| c.is_ascii_hexdigit());
+                                match r.ok().filter(|_| valid_hex).and_then(char::from_u32) {
                                     Some(ch) => result.push(ch),
-                                    None => return self.error("unknown character in \\xHH form"),
+                                    None => {
+                                        return self.error(if ch == 'x' {
+                                            "unknown character in \\xHH form"
+                                        } else {
+                                            "unknown character in \\UHHHHHHHH form"
+                                        });
+                                    }
                                 }
                             }
                             c => result.push(c),
@@ -2920,9 +2928,9 @@ c = d
             EscapePolicy::ReservedUnicodeExtended,
         ] {
             assert_eq!(escape_str(test_unicode, policy), r"\x00e9\x00a3\x2233\x5b57\x2728");
-            assert_eq!(escape_str(test_emoji, policy), r"\x1f431\x1f609");
-            assert_eq!(escape_str(test_cjk, policy), r"\x2020c\x20547");
-            assert_eq!(escape_str(test_high_points, policy), r"\x10abcd\x10ffff");
+            assert_eq!(escape_str(test_emoji, policy), r"\U0001f431\U0001f609");
+            assert_eq!(escape_str(test_cjk, policy), r"\U0002020c\U00020547");
+            assert_eq!(escape_str(test_high_points, policy), r"\U0010abcd\U0010ffff");
         }
     }
 

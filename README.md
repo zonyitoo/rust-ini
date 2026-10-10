@@ -75,6 +75,15 @@ fn main() {
 
 * More details could be found in `examples`.
 
+## Unicode escaping
+
+Extended Unicode escape policies (`BasicsUnicodeExtended`,
+`ReservedUnicodeExtended` and `Everything`) write supplementary codepoints
+above U+FFFF as `\UXXXXXXXX`, with exactly eight hexadecimal digits. The parser
+recognizes these escapes when `ParseOption::enabled_escape` is enabled.
+BMP characters keep the existing four-digit `\xXXXX` form, so hexadecimal
+characters following an escape remain ordinary text.
+
 ## License
 
 [The MIT License (MIT)](https://opensource.org/licenses/MIT)
