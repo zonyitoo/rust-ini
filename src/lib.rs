@@ -1598,7 +1598,10 @@ impl<'a> Parser<'a> {
                         continue;
                     };
 
-                    if matches!(ch, '\n') {
+                    if ch == '\n' || (ch == '\r' && self.rdr.as_str().starts_with('\n')) {
+                        if ch == '\r' {
+                            self.bump();
+                        }
                         in_line_continuation = true;
                     } else if self.opt.enabled_escape {
                         match ch {
@@ -2131,6 +2134,41 @@ Otherline
         )
         .unwrap();
         assert_eq!(ini.get_from(Some("section name"), "Key").unwrap(), "Value Otherline");
+    }
+
+    #[test]
+    fn string_multiline_escape_crlf() {
+        let input = "[section name]\r\nKey = Value \\\r\nOtherline\r\nNext = kept\r\n";
+        for enabled_escape in [false, true] {
+            let ini = Ini::load_from_str_opt(
+                input,
+                ParseOption {
+                    enabled_escape,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(ini.get_from(Some("section name"), "Key"), Some("Value Otherline"));
+            assert_eq!(ini.get_from(Some("section name"), "Next"), Some("kept"));
+        }
+    }
+
+    #[cfg(feature = "inline-comment")]
+    #[test]
+    fn string_multiline_escape_crlf_inline_comment() {
+        let input = "Key = Value \\\r\n# comment\r\n; comment\r\nOtherline\r\nNext = kept\r\n";
+        for enabled_escape in [false, true] {
+            let ini = Ini::load_from_str_opt(
+                input,
+                ParseOption {
+                    enabled_escape,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(ini.get_from(None::<String>, "Key"), Some("Value Otherline"));
+            assert_eq!(ini.get_from(None::<String>, "Next"), Some("kept"));
+        }
     }
 
     #[cfg(feature = "inline-comment")]
